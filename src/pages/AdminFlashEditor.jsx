@@ -12,7 +12,7 @@ const FONT_OPTIONS = [
   'Courier New, monospace',
 ]
 
-const STYLE_KEYS = ['color', 'fontSize', 'rotation', 'fontWeight', 'fontStyle', 'fontFamily']
+const STYLE_KEYS = ['color', 'fontSize', 'rotation', 'fontWeight', 'fontStyle', 'fontFamily', 'fontUrl']
 
 function normalizeWordStyle(wordStyle) {
   if (!wordStyle || typeof wordStyle !== 'object') {
@@ -57,6 +57,88 @@ function buildInlineStyle(style = {}) {
   }
 }
 
+function parseGoogleFontFamily(url) {
+  try {
+    const parsed = new URL(url)
+    const familyParam = parsed.searchParams.get('family')
+    if (!familyParam) return null
+
+    const firstFamily = familyParam.split('|')[0]
+    const rawName = firstFamily.split(':')[0]
+    const decoded = decodeURIComponent(rawName).replace(/\+/g, ' ').trim()
+
+    return decoded || null
+  } catch {
+    return null
+  }
+}
+
+function extractGoogleFontStylesheetUrl(input) {
+  // 1. Clean up the input: remove code blocks and handle smart quotes
+  const raw = input
+    .replace(/```[\s\S]*?\n?|```/g, '')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/&amp;/g, '&') // Normalize ampersands immediately
+    .trim()
+
+  if (!raw) return null
+
+  // 2. Try to find a direct URL match first (this is the most reliable)
+  // This regex specifically looks for the fonts.googleapis.com URL inside any text
+  const directGoogleUrlMatch = raw.match(/https?:\/\/fonts\.googleapis\.com\/css2\?[^\s"'<>]+/i)
+  if (directGoogleUrlMatch) {
+    return directGoogleUrlMatch[0]
+  }
+
+  // 3. Robust DOM Parsing fallback
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(raw, 'text/html')
+    // Look for any link tag that contains 'fonts.googleapis.com' in the href
+    const links = Array.from(doc.querySelectorAll('link'))
+    for (const link of links) {
+      const href = link.getAttribute('href')
+      if (href && href.includes('fonts.googleapis.com')) {
+        return href
+      }
+    }
+  } catch (e) {
+    console.error("DOM Parsing failed", e)
+  }
+
+  // 4. Regex fallback for href specifically if DOMParser missed it
+  const hrefMatch = raw.match(/href=["'](https?:\/\/fonts\.googleapis\.com\/[^"']+)["']/i)
+  if (hrefMatch) {
+    return hrefMatch[1]
+  }
+
+  return null
+}
+
+function collectCustomFontsFromWordStyles(wordStyles = {}) {
+  const map = new Map()
+
+  Object.values(wordStyles).forEach((styleConfig) => {
+    const { base, segments } = normalizeWordStyle(styleConfig)
+
+    if (base.fontUrl && base.fontFamily) {
+      map.set(base.fontUrl, { family: base.fontFamily, url: base.fontUrl })
+    }
+
+    segments.forEach((segment) => {
+      if (segment.style?.fontUrl && segment.style?.fontFamily) {
+        map.set(segment.style.fontUrl, {
+          family: segment.style.fontFamily,
+          url: segment.style.fontUrl,
+        })
+      }
+    })
+  })
+
+  return Array.from(map.values())
+}
+
 export default function AdminFlashEditor() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -72,6 +154,7 @@ export default function AdminFlashEditor() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [selectionRange, setSelectionRange] = useState({ start: 0, end: 0 })
+  const [customFonts, setCustomFonts] = useState([])
 
   const [styleForm, setStyleForm] = useState({
     color: '#ffffff',
@@ -80,6 +163,7 @@ export default function AdminFlashEditor() {
     bold: false,
     italic: false,
     fontFamily: 'inherit',
+    fontUrl: '',
   })
 
   const words = useMemo(() => extractFlashWords(post?.body), [post?.body])
@@ -96,6 +180,7 @@ export default function AdminFlashEditor() {
 
         const data = await res.json()
         const styles = data.post.flashPresentation?.wordStyles || {}
+        const discoveredCustomFonts = collectCustomFontsFromWordStyles(styles)
         const loadedWpm =
           Number.isFinite(Number(data.post.flashPresentation?.wpm)) && Number(data.post.flashPresentation?.wpm) > 0
             ? Number(data.post.flashPresentation.wpm)
@@ -104,6 +189,7 @@ export default function AdminFlashEditor() {
         setPost(data.post)
         setWordStyles(styles)
         setSavedWordStyles(styles)
+        setCustomFonts(discoveredCustomFonts)
         setWpm(loadedWpm)
         setSavedWpm(loadedWpm)
       } catch (err) {
@@ -126,8 +212,24 @@ export default function AdminFlashEditor() {
       bold: base.fontWeight === '700',
       italic: base.fontStyle === 'italic',
       fontFamily: base.fontFamily || 'inherit',
+      fontUrl: base.fontUrl || '',
     })
   }, [currentIndex, wordStyles])
+
+  useEffect(() => {
+    customFonts.forEach((font) => {
+      if (!font.url) return
+      const selector = `link[data-google-font-url="${font.url.replace(/"/g, '\\"')}"]`
+      const exists = document.head.querySelector(selector)
+      if (!exists) {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = font.url
+        link.setAttribute('data-google-font-url', font.url)
+        document.head.appendChild(link)
+      }
+    })
+  }, [customFonts])
 
   useEffect(() => {
     setSelectionRange({ start: 0, end: 0 })
@@ -184,6 +286,7 @@ export default function AdminFlashEditor() {
         fontWeight: nextForm.bold ? '700' : '400',
         fontStyle: nextForm.italic ? 'italic' : 'normal',
         fontFamily: nextForm.fontFamily,
+        fontUrl: nextForm.fontUrl || undefined,
       }
 
       setWordStyles((prevStyles) => ({
@@ -246,6 +349,7 @@ export default function AdminFlashEditor() {
       fontWeight: styleForm.bold ? '700' : '400',
       fontStyle: styleForm.italic ? 'italic' : 'normal',
       fontFamily: styleForm.fontFamily,
+      fontUrl: styleForm.fontUrl || undefined,
     }
 
     setWordStyles((prevStyles) => ({
@@ -288,6 +392,57 @@ export default function AdminFlashEditor() {
       setSaving(false)
     }
   }
+
+  async function addGoogleFontFromClipboard() {
+    let clipboardText = ''
+
+    try {
+      clipboardText = await navigator.clipboard.readText()
+    } catch {
+      setError('Unable to read clipboard. Allow clipboard access and try again.')
+      return
+    }
+
+    const extractedUrl = extractGoogleFontStylesheetUrl(clipboardText)
+    if (!extractedUrl) {
+      setError('Clipboard does not contain a valid Google Fonts URL or <link> code block.')
+      return
+    }
+
+    const family = parseGoogleFontFamily(extractedUrl)
+    if (!family) {
+      setError('Could not extract font family. Paste a valid Google Fonts stylesheet link/code.')
+      return
+    }
+
+    const fontItem = { family, url: extractedUrl }
+    setCustomFonts((prev) => {
+      if (prev.some((font) => font.url === extractedUrl)) return prev
+      return [...prev, fontItem]
+    })
+
+    setError('')
+    setMessage(`Added Google Font: ${family}`)
+    setTimeout(() => setMessage(''), 3000);
+    updateCurrentWordStyle({ fontFamily: family, fontUrl: extractedUrl })
+  }
+
+  const builtinOptions = FONT_OPTIONS.map((font) => ({
+    key: `builtin:${font}`,
+    label: font,
+    family: font,
+    url: '',
+  }))
+  const customOptions = customFonts.map((font) => ({
+    key: `custom:${font.url}`,
+    label: `${font.family} (Google Font)`,
+    family: font.family,
+    url: font.url,
+  }))
+  const fontOptions = [...builtinOptions, ...customOptions]
+  const selectedFontKey = styleForm.fontUrl
+    ? `custom:${styleForm.fontUrl}`
+    : `builtin:${styleForm.fontFamily}`
 
   if (loading) {
     return (
@@ -471,15 +626,31 @@ export default function AdminFlashEditor() {
           </div>
 
           <div>
-            <label className="block text-sm text-gray-300 mb-1">Font Family</label>
+            <div className="flex items-center justify-between mb-1 gap-2">
+              <label className="block text-sm text-gray-300">Font Family</label>
+              <button
+                type="button"
+                onClick={addGoogleFontFromClipboard}
+                className="px-3 py-2 rounded-md bg-indigo-700 hover:bg-indigo-600 text-white text-sm font-semibold whitespace-nowrap"
+              >
+                Add from Clipboard
+              </button>
+            </div>
             <select
-              value={styleForm.fontFamily}
-              onChange={(e) => updateCurrentWordStyle({ fontFamily: e.target.value })}
+              value={selectedFontKey}
+              onChange={(e) => {
+                const selected = fontOptions.find((option) => option.key === e.target.value)
+                if (!selected) return
+                updateCurrentWordStyle({
+                  fontFamily: selected.family,
+                  fontUrl: selected.url,
+                })
+              }}
               className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-gray-100"
             >
-              {FONT_OPTIONS.map((font) => (
-                <option key={font} value={font}>
-                  {font}
+              {fontOptions.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label}
                 </option>
               ))}
             </select>

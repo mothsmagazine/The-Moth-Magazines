@@ -5,7 +5,7 @@ import { extractFlashWords } from '../utils/flashWords'
 
 const FIXED_WPM = 300
 const AUTO_HIDE_MS = 2500
-const STYLE_KEYS = ['color', 'fontSize', 'rotation', 'fontWeight', 'fontStyle', 'fontFamily']
+const STYLE_KEYS = ['color', 'fontSize', 'rotation', 'fontWeight', 'fontStyle', 'fontFamily', 'fontUrl']
 
 function normalizeWordStyle(wordStyle) {
   if (!wordStyle || typeof wordStyle !== 'object') {
@@ -50,6 +50,23 @@ function buildInlineStyle(style = {}) {
   }
 }
 
+function collectGoogleFontUrls(wordStyles = {}) {
+  const urls = new Set()
+
+  Object.values(wordStyles).forEach((styleConfig) => {
+    const { base, segments } = normalizeWordStyle(styleConfig)
+    if (base.fontUrl) urls.add(base.fontUrl)
+
+    segments.forEach((segment) => {
+      if (segment.style?.fontUrl) {
+        urls.add(segment.style.fontUrl)
+      }
+    })
+  })
+
+  return Array.from(urls)
+}
+
 export default function FlashRead() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -90,6 +107,22 @@ export default function FlashRead() {
       ? Number(post.flashPresentation.wpm)
       : FIXED_WPM
   const delay = Math.max(50, Math.floor(60000 / effectiveWpm))
+
+  useEffect(() => {
+    const urls = collectGoogleFontUrls(post?.flashPresentation?.wordStyles || {})
+
+    urls.forEach((url) => {
+      const selector = `link[data-google-font-url="${url.replace(/"/g, '\\"')}"]`
+      const exists = document.head.querySelector(selector)
+      if (!exists) {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        link.setAttribute('data-google-font-url', url)
+        document.head.appendChild(link)
+      }
+    })
+  }, [post])
 
   useEffect(() => {
     if (!isPlaying || words.length === 0) return
