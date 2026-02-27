@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { FaBackward, FaForward, FaPause, FaPlay } from 'react-icons/fa'
 
 const FIXED_WPM = 300
+const AUTO_HIDE_MS = 2500
 
 function extractWords(text) {
   if (!text) return []
@@ -25,8 +26,10 @@ export default function FlashRead() {
   const [error, setError] = useState('')
   const [isPlaying, setIsPlaying] = useState(false)
   const [wordIndex, setWordIndex] = useState(0)
+  const [showBottomControls, setShowBottomControls] = useState(true)
 
   const intervalRef = useRef(null)
+  const hideControlsTimeoutRef = useRef(null)
   const wasPlayingBeforeScrubRef = useRef(false)
 
   useEffect(() => {
@@ -72,6 +75,57 @@ export default function FlashRead() {
     }
   }, [isPlaying, delay, words.length, wordIndex])
 
+  useEffect(() => {
+    if (!isPlaying) {
+      setShowBottomControls(true)
+    }
+  }, [isPlaying])
+
+  useEffect(() => {
+    return () => {
+      if (hideControlsTimeoutRef.current) {
+        clearTimeout(hideControlsTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  function clearHideControlsTimer() {
+    if (hideControlsTimeoutRef.current) {
+      clearTimeout(hideControlsTimeoutRef.current)
+      hideControlsTimeoutRef.current = null
+    }
+  }
+
+  function startHideControlsTimer() {
+    clearHideControlsTimer()
+    if (!isPlaying) return
+
+    hideControlsTimeoutRef.current = setTimeout(() => {
+      setShowBottomControls(false)
+    }, AUTO_HIDE_MS)
+  }
+
+  function handleUserInteraction() {
+    setShowBottomControls(true)
+    startHideControlsTimer()
+  }
+
+  function handleCenterClick(e) {
+    if (!isPlaying) return
+
+    e.stopPropagation()
+
+    setShowBottomControls((prev) => {
+      const next = !prev
+      if (next) {
+        startHideControlsTimer()
+      } else {
+        clearHideControlsTimer()
+      }
+      return next
+    })
+  }
+
   function stepBackward() {
     setWordIndex((prev) => Math.max(0, prev - 1))
   }
@@ -83,6 +137,8 @@ export default function FlashRead() {
   function handleScrubStart() {
     wasPlayingBeforeScrubRef.current = isPlaying
     setIsPlaying(false)
+    clearHideControlsTimer()
+    setShowBottomControls(true)
   }
 
   function handleScrubChange(e) {
@@ -92,9 +148,19 @@ export default function FlashRead() {
   function handleScrubEnd() {
     if (wasPlayingBeforeScrubRef.current && wordIndex < words.length - 1) {
       setIsPlaying(true)
+      startHideControlsTimer()
     }
     wasPlayingBeforeScrubRef.current = false
   }
+
+  useEffect(() => {
+    if (isPlaying) {
+      startHideControlsTimer()
+    } else {
+      clearHideControlsTimer()
+      setShowBottomControls(true)
+    }
+  }, [isPlaying])
 
   if (loading) {
     return (
@@ -119,7 +185,12 @@ export default function FlashRead() {
   }
 
   return (
-    <section className="min-h-screen flex flex-col px-4 py-6">
+    <section
+      onMouseMove={handleUserInteraction}
+      onClick={handleUserInteraction}
+      onTouchStart={handleUserInteraction}
+      className="min-h-screen flex flex-col px-4 py-6"
+    >
       <div className="flex items-center justify-between max-w-4xl mx-auto w-full">
         <button
           onClick={() => navigate('/')}
@@ -133,7 +204,10 @@ export default function FlashRead() {
         <span className="text-sm text-gray-400">{wordIndex + 1}/{Math.max(words.length, 1)}</span>
       </div>
 
-      <div className="flex-1 flex items-center justify-center">
+      <div
+        onClick={handleCenterClick}
+        className={`flex-1 flex items-center justify-center ${isPlaying ? 'cursor-pointer' : ''}`}
+      >
         <div className="text-center">
           <div className="h-20 flex items-center justify-center">
             <span className="text-4xl md:text-6xl font-bold text-gray-100 tracking-wide">
@@ -143,53 +217,61 @@ export default function FlashRead() {
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto w-full pb-4">
-        <div className="mb-4">
-          <label className="block text-xs text-gray-400 mb-2">
-            Progress: {wordIndex + 1} / {Math.max(words.length, 1)}
-          </label>
-          <input
-            type="range"
-            min={0}
-            max={Math.max(words.length - 1, 0)}
-            step={1}
-            value={Math.min(wordIndex, Math.max(words.length - 1, 0))}
-            onPointerDown={handleScrubStart}
-            onPointerUp={handleScrubEnd}
-            onTouchStart={handleScrubStart}
-            onTouchEnd={handleScrubEnd}
-            onMouseDown={handleScrubStart}
-            onMouseUp={handleScrubEnd}
-            onChange={handleScrubChange}
-            disabled={words.length === 0}
-            className="w-full"
-          />
-        </div>
-
-        <div className="rounded-xl border border-gray-700 bg-gray-800/70 p-3">
-          <div className="flex items-center justify-center gap-3">
-            <button
-              onClick={stepBackward}
-              aria-label="Back"
-              className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-100 font-medium"
-            >
-              <FaBackward />
-            </button>
-            <button
-              onClick={() => setIsPlaying((prev) => !prev)}
+      <div className="max-w-3xl mx-auto w-full pb-4 h-40 relative">
+        <div
+          className={`absolute inset-x-0 bottom-4 transition-all transform
+            ${showBottomControls 
+              ? 'opacity-100 pointer-events-auto duration-250 ease-out' 
+              : 'opacity-0 pointer-events-none duration-200 ease-in'
+            }`}
+        >
+          <div className="mb-4">
+            <label className="block text-xs text-gray-400 mb-2">
+              Progress: {wordIndex + 1} / {Math.max(words.length, 1)}
+            </label>
+            <input
+              type="range"
+              min={0}
+              max={Math.max(words.length - 1, 0)}
+              step={1}
+              value={Math.min(wordIndex, Math.max(words.length - 1, 0))}
+              onPointerDown={handleScrubStart}
+              onPointerUp={handleScrubEnd}
+              onTouchStart={handleScrubStart}
+              onTouchEnd={handleScrubEnd}
+              onMouseDown={handleScrubStart}
+              onMouseUp={handleScrubEnd}
+              onChange={handleScrubChange}
               disabled={words.length === 0}
-              aria-label={isPlaying ? 'Pause' : 'Play'}
-              className="px-5 py-2 rounded-md bg-pink-600 hover:bg-pink-700 text-white font-semibold disabled:opacity-50"
-            >
-              {isPlaying ? <FaPause /> : <FaPlay />}
-            </button>
-            <button
-              onClick={stepForward}
-              aria-label="Next"
-              className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-100 font-medium"
-            >
-              <FaForward />
-            </button>
+              className="w-full"
+            />
+          </div>
+
+          <div className="rounded-xl border border-gray-700 bg-gray-800/70 p-3">
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={stepBackward}
+                aria-label="Back"
+                className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-100 font-medium"
+              >
+                <FaBackward />
+              </button>
+              <button
+                onClick={() => setIsPlaying((prev) => !prev)}
+                disabled={words.length === 0}
+                aria-label={isPlaying ? 'Pause' : 'Play'}
+                className="px-5 py-2 rounded-md bg-pink-600 hover:bg-pink-700 text-white font-semibold disabled:opacity-50"
+              >
+                {isPlaying ? <FaPause /> : <FaPlay />}
+              </button>
+              <button
+                onClick={stepForward}
+                aria-label="Next"
+                className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-100 font-medium"
+              >
+                <FaForward />
+              </button>
+            </div>
           </div>
         </div>
       </div>
