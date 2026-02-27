@@ -162,6 +162,16 @@ export default function AdminEditor() {
         {isEdit ? 'Edit Post' : 'New Post'}
       </h1>
 
+      {isEdit && (
+        <button
+          type="button"
+          onClick={() => navigate(`/admin/flash/${id}`)}
+          className="mb-6 px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition"
+        >
+          Edit Flash Word Styles
+        </button>
+      )}
+
       {status === 'success' && (
         <div className="mb-6 p-4 rounded-lg bg-green-900/40 border border-green-700 text-green-300">
           {isEdit ? 'Post updated!' : 'Post published!'} Redirecting…

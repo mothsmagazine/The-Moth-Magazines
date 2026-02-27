@@ -6,6 +6,7 @@ import Read from './pages/Read'
 import Admin from './pages/Admin'
 import AdminEditor from './pages/AdminEditor'
 import FlashRead from './pages/FlashRead'
+import AdminFlashEditor from './pages/AdminFlashEditor'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -23,6 +24,7 @@ createRoot(document.getElementById('root')).render(
           <Route index element={<Admin />} />
           <Route path="new" element={<AdminEditor />} />
           <Route path="edit/:id" element={<AdminEditor />} />
+          <Route path="flash/:id" element={<AdminFlashEditor />} />
         </Route>
 
         {/* Catch-all 404 */}

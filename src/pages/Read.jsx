@@ -107,8 +107,7 @@ export default function Read() {
   // ——— Posts list ———
   return (
     <section className="max-w-2xl mx-auto py-10 px-4">
-      <h1 className="text-3xl font-bold mb-6 text-gray-100">Read</h1>
-
+      
       {loading && <p className="text-gray-400">Loading posts…</p>}
       {error && <p className="text-red-400">{error}</p>}
 

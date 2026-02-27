@@ -60,7 +60,7 @@ export default {
 
       // POST /api/posts — create a new post
       if (url.pathname === "/api/posts" && request.method === "POST") {
-        const { title, author, body } = await request.json();
+        const { title, author, body, flashPresentation } = await request.json();
 
         if (!title || !body) {
           return Response.json(
@@ -75,6 +75,16 @@ export default {
           title: title.trim(),
           author: (author || "Anonymous").trim(),
           body, // keep raw (may contain image markdown/html)
+          flashPresentation:
+            flashPresentation && typeof flashPresentation === "object"
+              ? {
+                  version: 1,
+                  wordStyles:
+                    flashPresentation.wordStyles && typeof flashPresentation.wordStyles === "object"
+                      ? flashPresentation.wordStyles
+                      : {},
+                }
+              : { version: 1, wordStyles: {} },
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -160,6 +170,17 @@ export default {
           title: (updates.title ?? oldPost.title).trim(),
           author: (updates.author ?? oldPost.author).trim(),
           body: updates.body ?? oldPost.body,
+          flashPresentation:
+            updates.flashPresentation === undefined
+              ? oldPost.flashPresentation ?? { version: 1, wordStyles: {} }
+              : {
+                  version: 1,
+                  wordStyles:
+                    updates.flashPresentation?.wordStyles &&
+                    typeof updates.flashPresentation.wordStyles === "object"
+                      ? updates.flashPresentation.wordStyles
+                      : {},
+                },
           updatedAt: new Date().toISOString(),
         };
 

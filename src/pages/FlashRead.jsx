@@ -1,21 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { FaBackward, FaForward, FaPause, FaPlay } from 'react-icons/fa'
+import { extractFlashWords } from '../utils/flashWords'
 
 const FIXED_WPM = 300
 const AUTO_HIDE_MS = 2500
-
-function extractWords(text) {
-  if (!text) return []
-
-  const withoutImages = text.replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
-  const withoutHtml = withoutImages.replace(/<[^>]+>/g, ' ')
-
-  return withoutHtml
-    .split(/\s+/)
-    .map((word) => word.trim())
-    .filter(Boolean)
-}
 
 export default function FlashRead() {
   const { id } = useParams()
@@ -49,7 +38,8 @@ export default function FlashRead() {
     loadPost()
   }, [id])
 
-  const words = useMemo(() => extractWords(post?.body), [post?.body])
+  const words = useMemo(() => extractFlashWords(post?.body), [post?.body])
+  const currentWordStyle = post?.flashPresentation?.wordStyles?.[wordIndex] || {}
   const delay = Math.max(50, Math.floor(60000 / FIXED_WPM))
 
   useEffect(() => {
@@ -111,7 +101,7 @@ export default function FlashRead() {
   }
 
   function handleCenterClick(e) {
-    if (!isPlaying) return
+    // if (!isPlaying) return
 
     e.stopPropagation()
 
@@ -211,7 +201,18 @@ export default function FlashRead() {
         <div className="text-center">
           <div className="h-20 flex items-center justify-center">
             <span className="text-4xl md:text-6xl font-bold text-gray-100 tracking-wide">
+            <span
+              className="leading-none"
+              style={{
+                color: currentWordStyle.color,
+                fontSize: currentWordStyle.fontSize ? `${currentWordStyle.fontSize}px` : undefined,
+                fontWeight: currentWordStyle.fontWeight,
+                fontStyle: currentWordStyle.fontStyle,
+                fontFamily: currentWordStyle.fontFamily,
+              }}
+            >
               {words[wordIndex] || 'No words available'}
+            </span>
             </span>
           </div>
         </div>
