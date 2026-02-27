@@ -79,12 +79,16 @@ export default {
             flashPresentation && typeof flashPresentation === "object"
               ? {
                   version: 1,
+                  wpm:
+                    Number.isFinite(Number(flashPresentation.wpm)) && Number(flashPresentation.wpm) > 0
+                      ? Number(flashPresentation.wpm)
+                      : 300,
                   wordStyles:
                     flashPresentation.wordStyles && typeof flashPresentation.wordStyles === "object"
                       ? flashPresentation.wordStyles
                       : {},
                 }
-              : { version: 1, wordStyles: {} },
+              : { version: 1, wpm: 300, wordStyles: {} },
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -172,9 +176,29 @@ export default {
           body: updates.body ?? oldPost.body,
           flashPresentation:
             updates.flashPresentation === undefined
-              ? oldPost.flashPresentation ?? { version: 1, wordStyles: {} }
+              ? {
+                  version: 1,
+                  wpm:
+                    Number.isFinite(Number(oldPost.flashPresentation?.wpm)) &&
+                    Number(oldPost.flashPresentation?.wpm) > 0
+                      ? Number(oldPost.flashPresentation.wpm)
+                      : 300,
+                  wordStyles:
+                    oldPost.flashPresentation?.wordStyles &&
+                    typeof oldPost.flashPresentation.wordStyles === "object"
+                      ? oldPost.flashPresentation.wordStyles
+                      : {},
+                }
               : {
                   version: 1,
+                  wpm:
+                    Number.isFinite(Number(updates.flashPresentation?.wpm)) &&
+                    Number(updates.flashPresentation.wpm) > 0
+                      ? Number(updates.flashPresentation.wpm)
+                      : Number.isFinite(Number(oldPost.flashPresentation?.wpm)) &&
+                          Number(oldPost.flashPresentation?.wpm) > 0
+                        ? Number(oldPost.flashPresentation.wpm)
+                        : 300,
                   wordStyles:
                     updates.flashPresentation?.wordStyles &&
                     typeof updates.flashPresentation.wordStyles === "object"

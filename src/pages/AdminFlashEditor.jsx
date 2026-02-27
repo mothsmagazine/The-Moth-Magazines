@@ -12,6 +12,51 @@ const FONT_OPTIONS = [
   'Courier New, monospace',
 ]
 
+const STYLE_KEYS = ['color', 'fontSize', 'rotation', 'fontWeight', 'fontStyle', 'fontFamily']
+
+function normalizeWordStyle(wordStyle) {
+  if (!wordStyle || typeof wordStyle !== 'object') {
+    return { base: {}, segments: [] }
+  }
+
+  const baseFromRoot = {}
+  STYLE_KEYS.forEach((key) => {
+    if (wordStyle[key] !== undefined) {
+      baseFromRoot[key] = wordStyle[key]
+    }
+  })
+
+  const base = {
+    ...(wordStyle.base && typeof wordStyle.base === 'object' ? wordStyle.base : {}),
+    ...baseFromRoot,
+  }
+
+  const segments = Array.isArray(wordStyle.segments)
+    ? wordStyle.segments
+        .filter((segment) => segment && typeof segment === 'object')
+        .map((segment) => ({
+          start: Number(segment.start),
+          end: Number(segment.end),
+          style: segment.style && typeof segment.style === 'object' ? segment.style : {},
+        }))
+        .filter((segment) => Number.isFinite(segment.start) && Number.isFinite(segment.end) && segment.end > segment.start)
+    : []
+
+  return { base, segments }
+}
+
+function buildInlineStyle(style = {}) {
+  return {
+    color: style.color,
+    fontSize: style.fontSize ? `${style.fontSize}px` : undefined,
+    transform: style.rotation !== undefined ? `rotate(${style.rotation}deg)` : undefined,
+    display: style.rotation !== undefined ? 'inline-block' : undefined,
+    fontWeight: style.fontWeight,
+    fontStyle: style.fontStyle,
+    fontFamily: style.fontFamily,
+  }
+}
+
 export default function AdminFlashEditor() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -19,15 +64,19 @@ export default function AdminFlashEditor() {
   const [post, setPost] = useState(null)
   const [wordStyles, setWordStyles] = useState({})
   const [savedWordStyles, setSavedWordStyles] = useState({})
+  const [wpm, setWpm] = useState(300)
+  const [savedWpm, setSavedWpm] = useState(300)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [selectionRange, setSelectionRange] = useState({ start: 0, end: 0 })
 
   const [styleForm, setStyleForm] = useState({
     color: '#ffffff',
     fontSize: 56,
+    rotation: 0,
     bold: false,
     italic: false,
     fontFamily: 'inherit',
@@ -35,8 +84,8 @@ export default function AdminFlashEditor() {
 
   const words = useMemo(() => extractFlashWords(post?.body), [post?.body])
   const hasUnsavedChanges = useMemo(
-    () => JSON.stringify(wordStyles) !== JSON.stringify(savedWordStyles),
-    [wordStyles, savedWordStyles],
+    () => JSON.stringify(wordStyles) !== JSON.stringify(savedWordStyles) || wpm !== savedWpm,
+    [wordStyles, savedWordStyles, wpm, savedWpm],
   )
 
   useEffect(() => {
@@ -47,10 +96,16 @@ export default function AdminFlashEditor() {
 
         const data = await res.json()
         const styles = data.post.flashPresentation?.wordStyles || {}
+        const loadedWpm =
+          Number.isFinite(Number(data.post.flashPresentation?.wpm)) && Number(data.post.flashPresentation?.wpm) > 0
+            ? Number(data.post.flashPresentation.wpm)
+            : 300
 
         setPost(data.post)
         setWordStyles(styles)
         setSavedWordStyles(styles)
+        setWpm(loadedWpm)
+        setSavedWpm(loadedWpm)
       } catch (err) {
         setError(err.message)
       } finally {
@@ -62,16 +117,21 @@ export default function AdminFlashEditor() {
   }, [id])
 
   useEffect(() => {
-    const currentStyle = wordStyles[currentIndex] || {}
+    const { base } = normalizeWordStyle(wordStyles[currentIndex])
 
     setStyleForm({
-      color: currentStyle.color || '#ffffff',
-      fontSize: Number(currentStyle.fontSize) || 56,
-      bold: currentStyle.fontWeight === '700',
-      italic: currentStyle.fontStyle === 'italic',
-      fontFamily: currentStyle.fontFamily || 'inherit',
+      color: base.color || '#ffffff',
+      fontSize: Number(base.fontSize) || 56,
+      rotation: Number(base.rotation) || 0,
+      bold: base.fontWeight === '700',
+      italic: base.fontStyle === 'italic',
+      fontFamily: base.fontFamily || 'inherit',
     })
   }, [currentIndex, wordStyles])
+
+  useEffect(() => {
+    setSelectionRange({ start: 0, end: 0 })
+  }, [currentIndex])
 
   useEffect(() => {
     const handleBeforeUnload = (event) => {
@@ -83,6 +143,23 @@ export default function AdminFlashEditor() {
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [hasUnsavedChanges])
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return
+
+    const lockUrl = window.location.href
+    window.history.pushState({ flashEditorGuard: true }, '', lockUrl)
+
+    const handlePopState = () => {
+      window.history.pushState({ flashEditorGuard: true }, '', lockUrl)
+      setError('You have unsaved changes. Save All Flash Styles before leaving this page.')
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
     }
   }, [hasUnsavedChanges])
 
@@ -100,9 +177,10 @@ export default function AdminFlashEditor() {
     setStyleForm((prevForm) => {
       const nextForm = { ...prevForm, ...changes }
 
-      const nextStyle = {
+      const stylePatch = {
         color: nextForm.color,
         fontSize: Number(nextForm.fontSize),
+        rotation: Number(nextForm.rotation) || 0,
         fontWeight: nextForm.bold ? '700' : '400',
         fontStyle: nextForm.italic ? 'italic' : 'normal',
         fontFamily: nextForm.fontFamily,
@@ -110,7 +188,35 @@ export default function AdminFlashEditor() {
 
       setWordStyles((prevStyles) => ({
         ...prevStyles,
-        [currentIndex]: nextStyle,
+        [currentIndex]: (() => {
+          const currentWord = words[currentIndex] || ''
+          const { base, segments } = normalizeWordStyle(prevStyles[currentIndex])
+          const hasSelection =
+            selectionRange.end > selectionRange.start && selectionRange.start >= 0 && selectionRange.end <= currentWord.length
+
+          if (!hasSelection) {
+            return {
+              base: { ...base, ...stylePatch },
+              segments,
+            }
+          }
+
+          const nextSegments = [
+            ...segments.filter(
+              (segment) => !(segment.start === selectionRange.start && segment.end === selectionRange.end),
+            ),
+            {
+              start: selectionRange.start,
+              end: selectionRange.end,
+              style: stylePatch,
+            },
+          ]
+
+          return {
+            base,
+            segments: nextSegments,
+          }
+        })(),
       }))
 
       return nextForm
@@ -126,6 +232,30 @@ export default function AdminFlashEditor() {
     setMessage(`Style cleared for word #${currentIndex + 1}`)
   }
 
+  function applyCurrentStyleToNextAndMove() {
+    if (words.length === 0 || currentIndex >= words.length - 1) {
+      setMessage('You are already at the last word.')
+      return
+    }
+
+    const nextIndex = currentIndex + 1
+    const nextStyle = {
+      color: styleForm.color,
+      fontSize: Number(styleForm.fontSize),
+      rotation: Number(styleForm.rotation) || 0,
+      fontWeight: styleForm.bold ? '700' : '400',
+      fontStyle: styleForm.italic ? 'italic' : 'normal',
+      fontFamily: styleForm.fontFamily,
+    }
+
+    setWordStyles((prevStyles) => ({
+      ...prevStyles,
+      [nextIndex]: nextStyle,
+    }))
+    setCurrentIndex(nextIndex)
+    setMessage(`Applied style to word #${nextIndex + 1} and moved forward.`)
+  }
+
   async function saveAllStyles() {
     setSaving(true)
     setError('')
@@ -138,6 +268,7 @@ export default function AdminFlashEditor() {
         body: JSON.stringify({
           flashPresentation: {
             version: 1,
+            wpm,
             wordStyles,
           },
         }),
@@ -149,6 +280,7 @@ export default function AdminFlashEditor() {
       }
 
       setSavedWordStyles({ ...wordStyles })
+      setSavedWpm(wpm)
       setMessage('Flash styles saved successfully.')
     } catch (err) {
       setError(err.message)
@@ -181,6 +313,34 @@ export default function AdminFlashEditor() {
 
   const currentWord = words[currentIndex] || '(no word)'
 
+  function renderStyledWordPreview(word, styleConfig) {
+    const { base, segments } = normalizeWordStyle(styleConfig)
+    if (!word) return null
+
+    if (segments.length === 0) {
+      return (
+        <span style={buildInlineStyle(base)} className="leading-none inline-block">
+          {word}
+        </span>
+      )
+    }
+
+    return word.split('').map((char, index) => {
+      let mergedStyle = { ...base }
+      segments.forEach((segment) => {
+        if (index >= segment.start && index < segment.end) {
+          mergedStyle = { ...mergedStyle, ...segment.style }
+        }
+      })
+
+      return (
+        <span key={`${char}-${index}`} style={buildInlineStyle(mergedStyle)} className="leading-none inline-block">
+          {char}
+        </span>
+      )
+    })
+  }
+
   return (
     <section className="max-w-4xl mx-auto py-10 px-4 space-y-6">
       <div className="flex flex-row w-full justify-between">
@@ -197,12 +357,6 @@ export default function AdminFlashEditor() {
             Preview Flash Reader
           </button>
       </div>
-
-      {hasUnsavedChanges && (
-        <div className="p-3 rounded-md bg-amber-900/30 border border-amber-700 text-amber-300">
-          You have unsaved changes. Click "Save All Flash Styles" before leaving this page.
-        </div>
-      )}
 
       <div>
         <h1 className="text-3xl font-bold text-gray-100">Flash Word Style Editor</h1>
@@ -229,18 +383,27 @@ export default function AdminFlashEditor() {
         </div>
 
         <div className="mb-5 p-6 rounded-lg border border-gray-700 bg-gray-900/40 text-center min-h-32 flex items-center justify-center">
-          <span
-            style={{
-              color: styleForm.color,
-              fontSize: `${styleForm.fontSize}px`,
-              fontWeight: styleForm.bold ? 700 : 400,
-              fontStyle: styleForm.italic ? 'italic' : 'normal',
-              fontFamily: styleForm.fontFamily,
+          <div className="break-all">{renderStyledWordPreview(currentWord, wordStyles[currentIndex])}</div>
+        </div>
+
+        <div className="mb-5">
+          <label className="block text-sm text-gray-300 mb-1">Select part of current word (optional)</label>
+          <input
+            type="text"
+            value={currentWord}
+            readOnly
+            onSelect={(e) => {
+              const start = e.target.selectionStart ?? 0
+              const end = e.target.selectionEnd ?? 0
+              setSelectionRange({ start, end })
             }}
-            className="leading-none"
-          >
-            {currentWord}
-          </span>
+            className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-gray-100 font-mono"
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            {selectionRange.end > selectionRange.start
+              ? `Selected characters: ${selectionRange.start + 1}-${selectionRange.end}`
+              : 'No selection: style changes apply to the whole word.'}
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -259,10 +422,50 @@ export default function AdminFlashEditor() {
             <input
               type="range"
               min="24"
-              max="100"
+              max="180"
               step="1"
               value={styleForm.fontSize}
               onChange={(e) => updateCurrentWordStyle({ fontSize: Number(e.target.value) })}
+              className="w-full"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Flash Speed (WPM)</label>
+            <input
+              type="number"
+              min="0"
+              max="1600"
+              step="10"
+              value={wpm}
+              onChange={(e) => {
+                const next = Number(e.target.value)
+                if (Number.isFinite(next)) {
+                  setWpm(next)
+                }
+              }}
+              className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-gray-100"
+            />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm text-gray-300">Rotation: {styleForm.rotation}°</label>
+              <button
+                type="button"
+                onClick={() => updateCurrentWordStyle({ rotation: 0 })}
+                className="text-xs px-2 py-1 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-200"
+              >
+                Reset 0°
+              </button>
+            </div>
+            <input
+              type="range"
+              min="-180"
+              max="180"
+              step="1"
+              value={styleForm.rotation}
+              onChange={(e) => updateCurrentWordStyle({ rotation: Number(e.target.value) })}
               className="w-full"
             />
           </div>
@@ -303,6 +506,12 @@ export default function AdminFlashEditor() {
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
+          <button
+            onClick={applyCurrentStyleToNextAndMove}
+            className="px-4 py-2 rounded-md bg-indigo-700 hover:bg-indigo-600 text-white font-semibold"
+          >
+            Apply to Next + Move
+          </button>
           <button
             onClick={clearCurrentWordStyle}
             className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-200"

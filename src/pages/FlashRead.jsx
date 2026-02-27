@@ -5,6 +5,50 @@ import { extractFlashWords } from '../utils/flashWords'
 
 const FIXED_WPM = 300
 const AUTO_HIDE_MS = 2500
+const STYLE_KEYS = ['color', 'fontSize', 'rotation', 'fontWeight', 'fontStyle', 'fontFamily']
+
+function normalizeWordStyle(wordStyle) {
+  if (!wordStyle || typeof wordStyle !== 'object') {
+    return { base: {}, segments: [] }
+  }
+
+  const baseFromRoot = {}
+  STYLE_KEYS.forEach((key) => {
+    if (wordStyle[key] !== undefined) {
+      baseFromRoot[key] = wordStyle[key]
+    }
+  })
+
+  const base = {
+    ...(wordStyle.base && typeof wordStyle.base === 'object' ? wordStyle.base : {}),
+    ...baseFromRoot,
+  }
+
+  const segments = Array.isArray(wordStyle.segments)
+    ? wordStyle.segments
+        .filter((segment) => segment && typeof segment === 'object')
+        .map((segment) => ({
+          start: Number(segment.start),
+          end: Number(segment.end),
+          style: segment.style && typeof segment.style === 'object' ? segment.style : {},
+        }))
+        .filter((segment) => Number.isFinite(segment.start) && Number.isFinite(segment.end) && segment.end > segment.start)
+    : []
+
+  return { base, segments }
+}
+
+function buildInlineStyle(style = {}) {
+  return {
+    color: style.color,
+    fontSize: style.fontSize ? `${style.fontSize}px` : undefined,
+    transform: style.rotation !== undefined ? `rotate(${style.rotation}deg)` : undefined,
+    display: style.rotation !== undefined ? 'inline-block' : undefined,
+    fontWeight: style.fontWeight,
+    fontStyle: style.fontStyle,
+    fontFamily: style.fontFamily,
+  }
+}
 
 export default function FlashRead() {
   const { id } = useParams()
@@ -40,7 +84,12 @@ export default function FlashRead() {
 
   const words = useMemo(() => extractFlashWords(post?.body), [post?.body])
   const currentWordStyle = post?.flashPresentation?.wordStyles?.[wordIndex] || {}
-  const delay = Math.max(50, Math.floor(60000 / FIXED_WPM))
+  const currentWord = words[wordIndex] || 'No words available'
+  const effectiveWpm =
+    Number.isFinite(Number(post?.flashPresentation?.wpm)) && Number(post?.flashPresentation?.wpm) > 0
+      ? Number(post.flashPresentation.wpm)
+      : FIXED_WPM
+  const delay = Math.max(50, Math.floor(60000 / effectiveWpm))
 
   useEffect(() => {
     if (!isPlaying || words.length === 0) return
@@ -152,6 +201,34 @@ export default function FlashRead() {
     }
   }, [isPlaying])
 
+  function renderStyledCurrentWord(word, styleConfig) {
+    const { base, segments } = normalizeWordStyle(styleConfig)
+    if (!word) return null
+
+    if (segments.length === 0) {
+      return (
+        <span className="leading-none" style={buildInlineStyle(base)}>
+          {word}
+        </span>
+      )
+    }
+
+    return word.split('').map((char, index) => {
+      let mergedStyle = { ...base }
+      segments.forEach((segment) => {
+        if (index >= segment.start && index < segment.end) {
+          mergedStyle = { ...mergedStyle, ...segment.style }
+        }
+      })
+
+      return (
+        <span key={`${char}-${index}`} className="leading-none inline-block" style={buildInlineStyle(mergedStyle)}>
+          {char}
+        </span>
+      )
+    })
+  }
+
   if (loading) {
     return (
       <section className="min-h-screen flex items-center justify-center px-4">
@@ -201,18 +278,7 @@ export default function FlashRead() {
         <div className="text-center">
           <div className="h-20 flex items-center justify-center">
             <span className="text-4xl md:text-6xl font-bold text-gray-100 tracking-wide">
-            <span
-              className="leading-none"
-              style={{
-                color: currentWordStyle.color,
-                fontSize: currentWordStyle.fontSize ? `${currentWordStyle.fontSize}px` : undefined,
-                fontWeight: currentWordStyle.fontWeight,
-                fontStyle: currentWordStyle.fontStyle,
-                fontFamily: currentWordStyle.fontFamily,
-              }}
-            >
-              {words[wordIndex] || 'No words available'}
-            </span>
+              {renderStyledCurrentWord(currentWord, currentWordStyle)}
             </span>
           </div>
         </div>
