@@ -289,9 +289,10 @@ export default function FlashRead() {
       onMouseMove={handleUserInteraction}
       onClick={handleUserInteraction}
       onTouchStart={handleUserInteraction}
-      className="min-h-screen flex flex-col px-3 sm:px-4 py-6"
+      className="relative min-h-screen px-3 sm:px-4 py-6"
     >
-      <div className="flex items-center justify-between max-w-4xl mx-auto w-full">
+      <div className="absolute top-6 inset-x-0 z-20 px-3 sm:px-4">
+        <div className="flex items-center justify-between max-w-4xl mx-auto w-full">
         <button
           onClick={() => navigate('/')}
           className="text-sm text-pink-400 hover:text-pink-300 transition"
@@ -302,11 +303,12 @@ export default function FlashRead() {
           {post?.title}
         </h1>
         <span className="text-sm text-gray-400">{wordIndex + 1}/{Math.max(words.length, 1)}</span>
+        </div>
       </div>
 
       <div
         onClick={handleCenterClick}
-        className={`flex-1 flex items-center justify-center ${isPlaying ? 'cursor-pointer' : ''}`}
+        className={`absolute inset-0 flex items-center justify-center ${isPlaying ? 'cursor-pointer' : ''}`}
       >
         <div className="text-center">
           <div className="h-20 flex items-center justify-center">
@@ -317,7 +319,7 @@ export default function FlashRead() {
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto w-full pb-4 h-40 relative">
+      <div className="absolute inset-x-0 bottom-0 z-20 px-3 sm:px-4 max-w-3xl mx-auto w-full pb-4 h-40">
         <div
           className={`absolute inset-x-0 bottom-4 transition-all transform
             ${showBottomControls 
