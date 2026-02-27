@@ -264,7 +264,7 @@ export default function FlashRead() {
 
   if (loading) {
     return (
-      <section className="min-h-screen flex items-center justify-center px-4">
+      <section className="min-h-screen flex items-center justify-center px-3 sm:px-4">
         <p className="text-gray-400">Loading flash reader…</p>
       </section>
     )
@@ -272,7 +272,7 @@ export default function FlashRead() {
 
   if (error) {
     return (
-      <section className="min-h-screen flex flex-col items-center justify-center px-4 gap-4">
+      <section className="min-h-screen flex flex-col items-center justify-center px-3 sm:px-4 gap-4">
         <p className="text-red-400">{error}</p>
         <button
           onClick={() => navigate('/')}
@@ -289,7 +289,7 @@ export default function FlashRead() {
       onMouseMove={handleUserInteraction}
       onClick={handleUserInteraction}
       onTouchStart={handleUserInteraction}
-      className="min-h-screen flex flex-col px-4 py-6"
+      className="min-h-screen flex flex-col px-3 sm:px-4 py-6"
     >
       <div className="flex items-center justify-between max-w-4xl mx-auto w-full">
         <button

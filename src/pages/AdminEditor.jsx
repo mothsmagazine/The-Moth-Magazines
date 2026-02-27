@@ -143,14 +143,14 @@ export default function AdminEditor() {
 
   if (status === 'loading') {
     return (
-      <section className="max-w-2xl mx-auto py-10 px-4">
+      <section className="max-w-2xl mx-auto py-10 px-3 sm:px-4">
         <p className="text-gray-400">Loading post…</p>
       </section>
     )
   }
 
   return (
-    <section className="max-w-2xl mx-auto py-10 px-4">
+    <section className="max-w-2xl mx-auto py-10 px-3 sm:px-4">
       <button
         onClick={() => navigate('/admin')}
         className="mb-6 text-sm text-pink-400 hover:text-pink-300 transition"

@@ -446,7 +446,7 @@ export default function AdminFlashEditor() {
 
   if (loading) {
     return (
-      <section className="max-w-3xl mx-auto py-10 px-4">
+      <section className="max-w-3xl mx-auto py-10 px-3 sm:px-4">
         <p className="text-gray-400">Loading flash style editor…</p>
       </section>
     )
@@ -454,7 +454,7 @@ export default function AdminFlashEditor() {
 
   if (error && !post) {
     return (
-      <section className="max-w-3xl mx-auto py-10 px-4">
+      <section className="max-w-3xl mx-auto py-10 px-3 sm:px-4">
         <p className="text-red-400 mb-4">{error}</p>
         <button
           onClick={() => navigateWithUnsavedCheck('/admin')}
@@ -497,7 +497,7 @@ export default function AdminFlashEditor() {
   }
 
   return (
-    <section className="max-w-4xl mx-auto py-10 px-4 space-y-6">
+    <section className="max-w-4xl mx-auto py-10 px-3 sm:px-4 space-y-6">
       <div className="flex flex-row w-full justify-between">
           <button
             onClick={() => navigateWithUnsavedCheck(`/admin/edit/${id}`)}

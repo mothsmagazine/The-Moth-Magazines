@@ -66,10 +66,17 @@
 /* ---------- Page content ---------- */
 .page-content {
   flex: 1;
-  padding: 2rem;
+  padding: 1.25rem 0.75rem;
   max-width: 960px;
   width: 100%;
   margin: 0 auto;
+}
+
+@media (min-width: 640px) {
+  .page-content {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
 }
 
 /* ---------- Footer ---------- */

@@ -40,7 +40,7 @@ export default function Admin() {
   }
 
   return (
-    <section className="max-w-3xl mx-auto py-10 px-4">
+    <section className="max-w-3xl mx-auto py-10 px-3 sm:px-4">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold text-gray-100">Admin Dashboard</h1>
         <button

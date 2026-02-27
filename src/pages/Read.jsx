@@ -72,7 +72,7 @@ export default function Read() {
   // ——— Single post view ———
   if (selectedPost) {
     return (
-      <section className="max-w-2xl mx-auto py-10 px-4">
+      <section className="max-w-2xl mx-auto py-10 px-3 sm:px-4">
         <button
           onClick={closePost}
           className="mb-6 text-sm text-pink-400 hover:text-pink-300 transition"
@@ -106,7 +106,7 @@ export default function Read() {
 
   // ——— Posts list ———
   return (
-    <section className="max-w-2xl mx-auto py-10 px-4">
+    <section className="max-w-2xl mx-auto py-10 px-3 sm:px-4">
       
       {loading && <p className="text-gray-400">Loading posts…</p>}
       {error && <p className="text-red-400">{error}</p>}
