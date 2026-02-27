@@ -7,7 +7,7 @@ const FIXED_WPM = 300
 function extractWords(text) {
   if (!text) return []
 
-  const withoutImages = text.replace(/!\[(.*?)\]\((.*?)\)/g, ' $1 ')
+  const withoutImages = text.replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
   const withoutHtml = withoutImages.replace(/<[^>]+>/g, ' ')
 
   return withoutHtml
@@ -27,6 +27,7 @@ export default function FlashRead() {
   const [wordIndex, setWordIndex] = useState(0)
 
   const intervalRef = useRef(null)
+  const wasPlayingBeforeScrubRef = useRef(false)
 
   useEffect(() => {
     async function loadPost() {
@@ -77,6 +78,22 @@ export default function FlashRead() {
 
   function stepForward() {
     setWordIndex((prev) => Math.min(words.length - 1, prev + 1))
+  }
+
+  function handleScrubStart() {
+    wasPlayingBeforeScrubRef.current = isPlaying
+    setIsPlaying(false)
+  }
+
+  function handleScrubChange(e) {
+    setWordIndex(Number(e.target.value))
+  }
+
+  function handleScrubEnd() {
+    if (wasPlayingBeforeScrubRef.current && wordIndex < words.length - 1) {
+      setIsPlaying(true)
+    }
+    wasPlayingBeforeScrubRef.current = false
   }
 
   if (loading) {
@@ -137,7 +154,13 @@ export default function FlashRead() {
             max={Math.max(words.length - 1, 0)}
             step={1}
             value={Math.min(wordIndex, Math.max(words.length - 1, 0))}
-            onChange={(e) => setWordIndex(Number(e.target.value))}
+            onPointerDown={handleScrubStart}
+            onPointerUp={handleScrubEnd}
+            onTouchStart={handleScrubStart}
+            onTouchEnd={handleScrubEnd}
+            onMouseDown={handleScrubStart}
+            onMouseUp={handleScrubEnd}
+            onChange={handleScrubChange}
             disabled={words.length === 0}
             className="w-full"
           />
