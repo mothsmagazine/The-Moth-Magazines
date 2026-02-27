@@ -7,8 +7,8 @@ export default function FooterNavbarLayout() {
       <nav className="navbar">
         <div className="navbar-brand">The Moths Magazine</div>
         <div className="navbar-links">
-          <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Home</NavLink>
-          <NavLink to="/contact" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Contact</NavLink>
+          {/* <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Home</NavLink>
+          <NavLink to="/contact" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Contact</NavLink> */}
         </div>
       </nav>
 

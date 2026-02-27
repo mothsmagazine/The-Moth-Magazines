@@ -13,10 +13,8 @@ createRoot(document.getElementById('root')).render(
       <Routes>
         {/* Pages that get both navbar + footer */}
         <Route path="/" element={<FooterNavbarLayout />}>
-          <Route index element={<Home />} />
-          <Route path="/contact" element={<Contact />} />
+          <Route index element={<Read />} />
           <Route path="/write" element={<Write />} />
-          <Route path="/read" element={<Read />} />
         </Route>
 
         {/* Catch-all 404 */}
