@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 export default function Read() {
+  const navigate = useNavigate()
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -42,6 +44,31 @@ export default function Read() {
     setSelectedPost(null)
   }
 
+  // Render body text with embedded images
+  function renderBody(text) {
+    if (!text) return null
+    const parts = text.split(/(!\[.*?\]\(.*?\))/)
+    return parts.map((part, i) => {
+      const imgMatch = part.match(/^!\[(.*?)\]\((.*?)\)$/)
+      if (imgMatch) {
+        return (
+          <img
+            key={i}
+            src={imgMatch[2]}
+            alt={imgMatch[1]}
+            className="max-w-full rounded-lg my-4"
+            loading="lazy"
+          />
+        )
+      }
+      return part ? (
+        <span key={i} className="whitespace-pre-wrap">
+          {part}
+        </span>
+      ) : null
+    })
+  }
+
   // ——— Single post view ———
   if (selectedPost) {
     return (
@@ -63,8 +90,14 @@ export default function Read() {
               day: 'numeric',
             })}
           </p>
-          <div className="prose prose-invert max-w-none text-gray-300 whitespace-pre-wrap leading-relaxed">
-            {selectedPost.body}
+          <button
+            onClick={() => navigate(`/flash-read/${selectedPost.id}`)}
+            className="mb-6 px-4 py-2 rounded-md bg-pink-600 hover:bg-pink-700 text-white text-sm font-semibold transition"
+          >
+            Read in Flash Mode
+          </button>
+          <div className="prose max-w-none text-gray-300 leading-relaxed">
+            {renderBody(selectedPost.body)}
           </div>
         </article>
       </section>

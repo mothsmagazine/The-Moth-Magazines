@@ -10,7 +10,7 @@ export default {
     // CORS headers
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
     };
 
@@ -19,6 +19,45 @@ export default {
     }
 
     try {
+      // ──────────── IMAGE UPLOAD ────────────
+      // POST /api/images — upload an image, returns its public URL
+      if (url.pathname === "/api/images" && request.method === "POST") {
+        const formData = await request.formData();
+        const file = formData.get("file");
+
+        if (!file) {
+          return Response.json(
+            { error: "No file provided" },
+            { status: 400, headers: corsHeaders }
+          );
+        }
+
+        const ext = file.name.split(".").pop() || "bin";
+        const key = `images/${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${ext}`;
+
+        await env.POSTS_BUCKET.put(key, file.stream(), {
+          httpMetadata: { contentType: file.type },
+        });
+
+        const imageUrl = `/api/images/${key.replace("images/", "")}`;
+        return Response.json({ success: true, url: imageUrl }, { status: 201, headers: corsHeaders });
+      }
+
+      // GET /api/images/:filename — serve an image
+      const imgMatch = url.pathname.match(/^\/api\/images\/(.+)$/);
+      if (imgMatch && request.method === "GET") {
+        const object = await env.POSTS_BUCKET.get(`images/${imgMatch[1]}`);
+        if (!object) {
+          return new Response("Not found", { status: 404, headers: corsHeaders });
+        }
+        const headers = new Headers(corsHeaders);
+        headers.set("Content-Type", object.httpMetadata?.contentType || "application/octet-stream");
+        headers.set("Cache-Control", "public, max-age=31536000, immutable");
+        return new Response(object.body, { headers });
+      }
+
+      // ──────────── POSTS CRUD ────────────
+
       // POST /api/posts — create a new post
       if (url.pathname === "/api/posts" && request.method === "POST") {
         const { title, author, body } = await request.json();
@@ -35,8 +74,9 @@ export default {
           id,
           title: title.trim(),
           author: (author || "Anonymous").trim(),
-          body: body.trim(),
+          body, // keep raw (may contain image markdown/html)
           createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         };
 
         await env.POSTS_BUCKET.put(`posts/${id}.json`, JSON.stringify(post), {
@@ -47,16 +87,33 @@ export default {
         return Response.json({ success: true, post }, { status: 201, headers: corsHeaders });
       }
 
-      // GET /api/posts — list all posts
+      // GET /api/posts — list all posts (metadata only)
       if (url.pathname === "/api/posts" && request.method === "GET") {
         const listed = await env.POSTS_BUCKET.list({ prefix: "posts/" });
 
-        const posts = listed.objects.map((obj) => ({
-          id: obj.key.replace("posts/", "").replace(".json", ""),
-          title: obj.customMetadata?.title || "Untitled",
-          author: obj.customMetadata?.author || "Anonymous",
-          createdAt: obj.customMetadata?.createdAt || obj.uploaded.toISOString(),
-        }));
+        const posts = (
+          await Promise.all(
+            listed.objects
+              .filter((obj) => obj.key.endsWith(".json"))
+              .map(async (obj) => {
+                const id = obj.key.replace("posts/", "").replace(".json", "");
+                const stored = await env.POSTS_BUCKET.get(obj.key);
+
+                if (!stored) {
+                  return null;
+                }
+
+                const post = await stored.json();
+
+                return {
+                  id,
+                  title: post.title || "Untitled",
+                  author: post.author || "Anonymous",
+                  createdAt: post.createdAt || obj.uploaded.toISOString(),
+                };
+              })
+          )
+        ).filter(Boolean);
 
         // Sort newest first
         posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -64,8 +121,10 @@ export default {
         return Response.json({ posts }, { headers: corsHeaders });
       }
 
+      // Match /api/posts/:id for GET, PUT, DELETE
+      const postMatch = url.pathname.match(/^\/api\/posts\/([^/]+)$/);
+
       // GET /api/posts/:id — get a single post
-      const postMatch = url.pathname.match(/^\/api\/posts\/(.+)$/);
       if (postMatch && request.method === "GET") {
         const id = postMatch[1];
         const object = await env.POSTS_BUCKET.get(`posts/${id}.json`);
@@ -79,6 +138,44 @@ export default {
 
         const post = await object.json();
         return Response.json({ post }, { headers: corsHeaders });
+      }
+
+      // PUT /api/posts/:id — update an existing post
+      if (postMatch && request.method === "PUT") {
+        const id = postMatch[1];
+        const existing = await env.POSTS_BUCKET.get(`posts/${id}.json`);
+
+        if (!existing) {
+          return Response.json(
+            { error: "Post not found" },
+            { status: 404, headers: corsHeaders }
+          );
+        }
+
+        const oldPost = await existing.json();
+        const updates = await request.json();
+
+        const post = {
+          ...oldPost,
+          title: (updates.title ?? oldPost.title).trim(),
+          author: (updates.author ?? oldPost.author).trim(),
+          body: updates.body ?? oldPost.body,
+          updatedAt: new Date().toISOString(),
+        };
+
+        await env.POSTS_BUCKET.put(`posts/${id}.json`, JSON.stringify(post), {
+          httpMetadata: { contentType: "application/json" },
+          customMetadata: { title: post.title, author: post.author, createdAt: post.createdAt },
+        });
+
+        return Response.json({ success: true, post }, { headers: corsHeaders });
+      }
+
+      // DELETE /api/posts/:id — delete a post
+      if (postMatch && request.method === "DELETE") {
+        const id = postMatch[1];
+        await env.POSTS_BUCKET.delete(`posts/${id}.json`);
+        return Response.json({ success: true }, { headers: corsHeaders });
       }
 
       return Response.json({ error: "Not found" }, { status: 404, headers: corsHeaders });

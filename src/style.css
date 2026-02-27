@@ -1,6 +1,53 @@
 @import "tailwindcss";
 
+/* Automatic theme from OS preference */
+:root {
+  color-scheme: light dark;
+  --bg: #f5f7fb;
+  --text: #111827;
+  --muted: #4b5563;
+  --surface: #ffffff;
+  --surface-soft: #f3f4f6;
+  --border: #d1d5db;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f0f1a;
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+    --surface: #1f2937;
+    --surface-soft: #111827;
+    --border: #374151;
+  }
+}
+
 body {
-  background-color: #0f0f1a;
-  color: #e5e5e5;
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+/* Map current Tailwind utility usage to theme tokens */
+[class*="bg-gray-800"] {
+  background-color: var(--surface) !important;
+}
+
+[class*="bg-gray-700"] {
+  background-color: var(--surface-soft) !important;
+}
+
+[class*="border-gray-700"],
+[class*="border-gray-600"] {
+  border-color: var(--border) !important;
+}
+
+[class*="text-gray-100"],
+[class*="text-gray-200"],
+[class*="text-gray-300"] {
+  color: var(--text) !important;
+}
+
+[class*="text-gray-400"],
+[class*="text-gray-500"] {
+  color: var(--muted) !important;
 }

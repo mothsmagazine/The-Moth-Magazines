@@ -2,19 +2,27 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import FooterNavbarLayout from './layouts/FooterNavbarLayout'
-import Home from './pages/Home'
-import Contact from './pages/Contact'
-import Write from './pages/Write'
 import Read from './pages/Read'
+import Admin from './pages/Admin'
+import AdminEditor from './pages/AdminEditor'
+import FlashRead from './pages/FlashRead'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <Router>
       <Routes>
-        {/* Pages that get both navbar + footer */}
+        {/* Public: blog reader */}
         <Route path="/" element={<FooterNavbarLayout />}>
           <Route index element={<Read />} />
-          <Route path="/write" element={<Write />} />
+        </Route>
+
+        <Route path="/flash-read/:id" element={<FlashRead />} />
+
+        {/* Admin: manage posts (no navbar links point here) */}
+        <Route path="/admin" element={<FooterNavbarLayout />}>
+          <Route index element={<Admin />} />
+          <Route path="new" element={<AdminEditor />} />
+          <Route path="edit/:id" element={<AdminEditor />} />
         </Route>
 
         {/* Catch-all 404 */}
