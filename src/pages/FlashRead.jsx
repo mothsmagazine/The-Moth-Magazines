@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { FaBackward, FaForward, FaPause, FaPlay } from 'react-icons/fa'
 
-const DEFAULT_WPM = 300
+const FIXED_WPM = 300
 
 function extractWords(text) {
   if (!text) return []
@@ -24,7 +25,6 @@ export default function FlashRead() {
   const [error, setError] = useState('')
   const [isPlaying, setIsPlaying] = useState(false)
   const [wordIndex, setWordIndex] = useState(0)
-  const [wpm, setWpm] = useState(DEFAULT_WPM)
 
   const intervalRef = useRef(null)
 
@@ -46,7 +46,7 @@ export default function FlashRead() {
   }, [id])
 
   const words = useMemo(() => extractWords(post?.body), [post?.body])
-  const delay = Math.max(50, Math.floor(60000 / wpm))
+  const delay = Math.max(50, Math.floor(60000 / FIXED_WPM))
 
   useEffect(() => {
     if (!isPlaying || words.length === 0) return
@@ -128,14 +128,17 @@ export default function FlashRead() {
 
       <div className="max-w-3xl mx-auto w-full pb-4">
         <div className="mb-4">
-          <label className="block text-xs text-gray-400 mb-2">Speed: {wpm} WPM</label>
+          <label className="block text-xs text-gray-400 mb-2">
+            Progress: {wordIndex + 1} / {Math.max(words.length, 1)}
+          </label>
           <input
             type="range"
-            min="120"
-            max="700"
-            step="10"
-            value={wpm}
-            onChange={(e) => setWpm(Number(e.target.value))}
+            min={0}
+            max={Math.max(words.length - 1, 0)}
+            step={1}
+            value={Math.min(wordIndex, Math.max(words.length - 1, 0))}
+            onChange={(e) => setWordIndex(Number(e.target.value))}
+            disabled={words.length === 0}
             className="w-full"
           />
         </div>
@@ -144,22 +147,25 @@ export default function FlashRead() {
           <div className="flex items-center justify-center gap-3">
             <button
               onClick={stepBackward}
+              aria-label="Back"
               className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-100 font-medium"
             >
-              ⏮ Back
+              <FaBackward />
             </button>
             <button
               onClick={() => setIsPlaying((prev) => !prev)}
               disabled={words.length === 0}
+              aria-label={isPlaying ? 'Pause' : 'Play'}
               className="px-5 py-2 rounded-md bg-pink-600 hover:bg-pink-700 text-white font-semibold disabled:opacity-50"
             >
-              {isPlaying ? '⏸ Pause' : '▶ Play'}
+              {isPlaying ? <FaPause /> : <FaPlay />}
             </button>
             <button
               onClick={stepForward}
+              aria-label="Next"
               className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-100 font-medium"
             >
-              Next ⏭
+              <FaForward />
             </button>
           </div>
         </div>
