@@ -39,16 +39,29 @@ export default function Admin() {
     }
   }
 
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' })
+    navigate('/admin/login')
+  }
+
   return (
     <section className="max-w-3xl mx-auto py-10 px-3 sm:px-4">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-8 gap-3">
         <h1 className="text-3xl font-bold text-gray-100">Admin Dashboard</h1>
-        <button
-          onClick={() => navigate('/admin/new')}
-          className="px-5 py-2 rounded-lg bg-pink-600 hover:bg-pink-700 text-white font-semibold transition"
-        >
-          + New Post
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => navigate('/admin/new')}
+            className="px-5 py-2 rounded-lg bg-pink-600 hover:bg-pink-700 text-white font-semibold transition"
+          >
+            + New Post
+          </button>
+          <button
+            onClick={handleLogout}
+            className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-100 font-semibold transition"
+          >
+            Logout
+          </button>
+        </div>
       </div>
 
       {loading && <p className="text-gray-400">Loading posts…</p>}

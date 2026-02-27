@@ -1,24 +1,175 @@
+const SESSION_COOKIE_NAME = "admin_session";
+const SESSION_TTL_SECONDS = 60 * 60 * 12;
+
+function getCorsHeaders(request) {
+  const origin = request.headers.get("Origin");
+  return {
+    "Access-Control-Allow-Origin": origin || "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Credentials": "true",
+    Vary: "Origin",
+  };
+}
+
+function getCookie(request, cookieName) {
+  const rawCookie = request.headers.get("Cookie") || "";
+  const parts = rawCookie.split(";");
+  for (const part of parts) {
+    const [name, ...rest] = part.trim().split("=");
+    if (name === cookieName) {
+      return rest.join("=");
+    }
+  }
+  return null;
+}
+
+function base64UrlEncode(bytes) {
+  const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function base64UrlDecode(input) {
+  const base64 = input.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64 + "=".repeat((4 - (base64.length % 4 || 4)) % 4);
+  const binary = atob(padded);
+  return new Uint8Array([...binary].map((char) => char.charCodeAt(0)));
+}
+
+async function hmacSign(data, secret) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+
+  const signatureBuffer = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
+  return base64UrlEncode(new Uint8Array(signatureBuffer));
+}
+
+async function createSessionToken(secret) {
+  const payload = {
+    exp: Date.now() + SESSION_TTL_SECONDS * 1000,
+    nonce: crypto.randomUUID(),
+  };
+
+  const payloadB64 = base64UrlEncode(new TextEncoder().encode(JSON.stringify(payload)));
+  const signature = await hmacSign(payloadB64, secret);
+  return `${payloadB64}.${signature}`;
+}
+
+function timingSafeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
+
+async function verifySessionToken(token, secret) {
+  if (!token || typeof token !== "string") return false;
+  const [payloadB64, signature] = token.split(".");
+  if (!payloadB64 || !signature) return false;
+
+  const expectedSignature = await hmacSign(payloadB64, secret);
+  if (!timingSafeEqual(signature, expectedSignature)) {
+    return false;
+  }
+
+  try {
+    const payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(payloadB64)));
+    if (!payload?.exp || payload.exp < Date.now()) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function buildSessionCookie(token, maxAgeSeconds) {
+  return `${SESSION_COOKIE_NAME}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAgeSeconds}`;
+}
+
+function unauthorized(corsHeaders) {
+  return Response.json({ error: "Unauthorized" }, { status: 401, headers: corsHeaders });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // Only handle /api/* routes
     if (!url.pathname.startsWith("/api/")) {
       return new Response(null, { status: 404 });
     }
 
-    // CORS headers
-    const corsHeaders = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    };
+    const corsHeaders = getCorsHeaders(request);
 
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
 
     try {
+      // ──────────── AUTH ────────────
+      if (url.pathname === "/api/auth/login" && request.method === "POST") {
+        if (!env.ADMIN_PASSWORD || !env.ADMIN_SESSION_SECRET) {
+          return Response.json(
+            { error: "Admin auth is not configured" },
+            { status: 500, headers: corsHeaders }
+          );
+        }
+
+        const { password } = await request.json();
+        if (!password || password !== env.ADMIN_PASSWORD) {
+          return unauthorized(corsHeaders);
+        }
+
+        const token = await createSessionToken(env.ADMIN_SESSION_SECRET);
+        const headers = new Headers(corsHeaders);
+        headers.append("Set-Cookie", buildSessionCookie(token, SESSION_TTL_SECONDS));
+
+        return Response.json({ success: true }, { headers });
+      }
+
+      if (url.pathname === "/api/auth/logout" && request.method === "POST") {
+        const headers = new Headers(corsHeaders);
+        headers.append("Set-Cookie", buildSessionCookie("", 0));
+        return Response.json({ success: true }, { headers });
+      }
+
+      if (url.pathname === "/api/auth/session" && request.method === "GET") {
+        if (!env.ADMIN_SESSION_SECRET) {
+          return Response.json({ authenticated: false }, { headers: corsHeaders });
+        }
+
+        const token = getCookie(request, SESSION_COOKIE_NAME);
+        const authenticated = await verifySessionToken(token, env.ADMIN_SESSION_SECRET);
+        return Response.json({ authenticated }, { headers: corsHeaders });
+      }
+
+      const isProtectedRoute =
+        (url.pathname === "/api/images" && request.method === "POST") ||
+        (url.pathname === "/api/posts" && request.method === "POST") ||
+        (url.pathname.match(/^\/api\/posts\/[^/]+$/) && ["PUT", "DELETE"].includes(request.method));
+
+      if (isProtectedRoute) {
+        if (!env.ADMIN_SESSION_SECRET) {
+          return Response.json(
+            { error: "Admin auth is not configured" },
+            { status: 500, headers: corsHeaders }
+          );
+        }
+
+        const token = getCookie(request, SESSION_COOKIE_NAME);
+        const authenticated = await verifySessionToken(token, env.ADMIN_SESSION_SECRET);
+        if (!authenticated) {
+          return unauthorized(corsHeaders);
+        }
+      }
+
       // ──────────── IMAGE UPLOAD ────────────
       // POST /api/images — upload an image, returns its public URL
       if (url.pathname === "/api/images" && request.method === "POST") {

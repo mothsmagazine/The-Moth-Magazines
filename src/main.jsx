@@ -2,11 +2,13 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import FooterNavbarLayout from './layouts/FooterNavbarLayout'
+import ProtectedAdminRoute from './layouts/ProtectedAdminRoute'
 import Read from './pages/Read'
 import Admin from './pages/Admin'
 import AdminEditor from './pages/AdminEditor'
 import FlashRead from './pages/FlashRead'
 import AdminFlashEditor from './pages/AdminFlashEditor'
+import AdminLogin from './pages/AdminLogin'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -19,12 +21,18 @@ createRoot(document.getElementById('root')).render(
 
         <Route path="/flash-read/:id" element={<FlashRead />} />
 
-        {/* Admin: manage posts (no navbar links point here) */}
-        <Route path="/admin" element={<FooterNavbarLayout />}>
-          <Route index element={<Admin />} />
-          <Route path="new" element={<AdminEditor />} />
-          <Route path="edit/:id" element={<AdminEditor />} />
-          <Route path="flash/:id" element={<AdminFlashEditor />} />
+        <Route path="/admin/login" element={<FooterNavbarLayout />}>
+          <Route index element={<AdminLogin />} />
+        </Route>
+
+        {/* Admin: protected */}
+        <Route element={<ProtectedAdminRoute />}>
+          <Route path="/admin" element={<FooterNavbarLayout />}>
+            <Route index element={<Admin />} />
+            <Route path="new" element={<AdminEditor />} />
+            <Route path="edit/:id" element={<AdminEditor />} />
+            <Route path="flash/:id" element={<AdminFlashEditor />} />
+          </Route>
         </Route>
 
         {/* Catch-all 404 */}

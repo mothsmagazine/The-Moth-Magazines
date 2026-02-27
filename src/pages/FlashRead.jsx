@@ -81,6 +81,7 @@ export default function FlashRead() {
   const intervalRef = useRef(null)
   const hideControlsTimeoutRef = useRef(null)
   const wasPlayingBeforeScrubRef = useRef(false)
+  const lastCenterTouchAtRef = useRef(0)
 
   useEffect(() => {
     async function loadPost() {
@@ -183,9 +184,30 @@ export default function FlashRead() {
   }
 
   function handleCenterClick(e) {
+    if (Date.now() - lastCenterTouchAtRef.current < 500) {
+      return
+    }
+
     // if (!isPlaying) return
 
     e.stopPropagation()
+
+    setShowBottomControls((prev) => {
+      const next = !prev
+      if (next) {
+        startHideControlsTimer()
+      } else {
+        clearHideControlsTimer()
+      }
+      return next
+    })
+  }
+
+  function handleCenterTouchEnd(e) {
+    e.preventDefault()
+    e.stopPropagation()
+
+    lastCenterTouchAtRef.current = Date.now()
 
     setShowBottomControls((prev) => {
       const next = !prev
@@ -288,8 +310,7 @@ export default function FlashRead() {
     <section
       onMouseMove={handleUserInteraction}
       onClick={handleUserInteraction}
-      onTouchStart={handleUserInteraction}
-      className="relative min-h-screen px-3 sm:px-4 py-6"
+      className="fixed inset-0 overflow-hidden px-3 sm:px-4 py-6"
     >
       <div className="absolute top-6 inset-x-0 z-20 px-3 sm:px-4">
         <div className="flex items-center justify-between max-w-4xl mx-auto w-full">
@@ -308,10 +329,11 @@ export default function FlashRead() {
 
       <div
         onClick={handleCenterClick}
+        onTouchEnd={handleCenterTouchEnd}
         className={`absolute inset-0 flex items-center justify-center ${isPlaying ? 'cursor-pointer' : ''}`}
       >
-        <div className="text-center">
-          <div className="h-20 flex items-center justify-center">
+        <div className="text-center overflow-visible">
+          <div className="h-20 flex items-center justify-center overflow-visible">
             <span className="text-4xl md:text-6xl font-bold text-gray-100 tracking-wide">
               {renderStyledCurrentWord(currentWord, currentWordStyle)}
             </span>
@@ -319,60 +341,62 @@ export default function FlashRead() {
         </div>
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 z-20 px-3 sm:px-4 max-w-3xl mx-auto w-full pb-4 h-40">
-        <div
-          className={`absolute inset-x-0 bottom-4 transition-all transform
-            ${showBottomControls 
-              ? 'opacity-100 pointer-events-auto duration-250 ease-out' 
-              : 'opacity-0 pointer-events-none duration-200 ease-in'
-            }`}
-        >
-          <div className="mb-4">
-            <label className="block text-xs text-gray-400 mb-2">
-              Progress: {wordIndex + 1} / {Math.max(words.length, 1)}
-            </label>
-            <input
-              type="range"
-              min={0}
-              max={Math.max(words.length - 1, 0)}
-              step={1}
-              value={Math.min(wordIndex, Math.max(words.length - 1, 0))}
-              onPointerDown={handleScrubStart}
-              onPointerUp={handleScrubEnd}
-              onTouchStart={handleScrubStart}
-              onTouchEnd={handleScrubEnd}
-              onMouseDown={handleScrubStart}
-              onMouseUp={handleScrubEnd}
-              onChange={handleScrubChange}
-              disabled={words.length === 0}
-              className="w-full"
-            />
-          </div>
-
-          <div className="rounded-xl border border-gray-700 bg-gray-800/70 p-3">
-            <div className="flex items-center justify-center gap-3">
-              <button
-                onClick={stepBackward}
-                aria-label="Back"
-                className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-100 font-medium"
-              >
-                <FaBackward />
-              </button>
-              <button
-                onClick={() => setIsPlaying((prev) => !prev)}
+      <div className="absolute inset-x-0 bottom-0 z-20 px-3 sm:px-4 pb-4 h-40">
+        <div className="max-w-3xl mx-auto w-full relative h-full">
+          <div
+            className={`absolute inset-x-0 bottom-4 transition-all transform
+              ${showBottomControls 
+                ? 'opacity-100 pointer-events-auto duration-250 ease-out' 
+                : 'opacity-0 pointer-events-none duration-200 ease-in'
+              }`}
+          >
+            <div className="mb-4">
+              <label className="block text-xs text-gray-400 mb-2">
+                Progress: {wordIndex + 1} / {Math.max(words.length, 1)}
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={Math.max(words.length - 1, 0)}
+                step={1}
+                value={Math.min(wordIndex, Math.max(words.length - 1, 0))}
+                onPointerDown={handleScrubStart}
+                onPointerUp={handleScrubEnd}
+                onTouchStart={handleScrubStart}
+                onTouchEnd={handleScrubEnd}
+                onMouseDown={handleScrubStart}
+                onMouseUp={handleScrubEnd}
+                onChange={handleScrubChange}
                 disabled={words.length === 0}
-                aria-label={isPlaying ? 'Pause' : 'Play'}
-                className="px-5 py-2 rounded-md bg-pink-600 hover:bg-pink-700 text-white font-semibold disabled:opacity-50"
-              >
-                {isPlaying ? <FaPause /> : <FaPlay />}
-              </button>
-              <button
-                onClick={stepForward}
-                aria-label="Next"
-                className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-100 font-medium"
-              >
-                <FaForward />
-              </button>
+                className="w-full"
+              />
+            </div>
+
+            <div className="rounded-xl border border-gray-700 bg-gray-800/70 p-3">
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  onClick={stepBackward}
+                  aria-label="Back"
+                  className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-100 font-medium"
+                >
+                  <FaBackward />
+                </button>
+                <button
+                  onClick={() => setIsPlaying((prev) => !prev)}
+                  disabled={words.length === 0}
+                  aria-label={isPlaying ? 'Pause' : 'Play'}
+                  className="px-5 py-2 rounded-md bg-pink-600 hover:bg-pink-700 text-white font-semibold disabled:opacity-50"
+                >
+                  {isPlaying ? <FaPause /> : <FaPlay />}
+                </button>
+                <button
+                  onClick={stepForward}
+                  aria-label="Next"
+                  className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-100 font-medium"
+                >
+                  <FaForward />
+                </button>
+              </div>
             </div>
           </div>
         </div>
