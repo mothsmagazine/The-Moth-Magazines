@@ -25,9 +25,17 @@ const STYLE_KEYS = [
   'fontUrl',
 ]
 const DEFAULT_PIVOT_COLOR = '#ec4899'
-const DEFAULT_WORD_COLOR = '#f3f4f6'
+function getThemeSafeDefaultWordColor() {
+  if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
+    return '#e5e7eb'
+  }
+  return '#111827'
+}
+
+const DEFAULT_WORD_COLOR = getThemeSafeDefaultWordColor()
 const DEFAULT_WPM = 300
 const SPRITZ_LEFT_COL_CH = 8
+const SPRITZ_GUIDE_OFFSET_PX = 80
 
 function getPivotIndex(word, pivotIndexOneBased = '', legacyPivotLetter = '') {
   const asNumber = Number(pivotIndexOneBased)
@@ -460,19 +468,33 @@ export default function AdminFlashEditor() {
     })
 
     return (
-      <div className="relative w-full max-w-lg">
-        <span className="absolute left-1/2 -translate-x-1/2 top-0 w-8 h-px bg-gray-500/80" />
-        <span className="absolute left-1/2 -translate-x-1/2 bottom-0 w-8 h-px bg-gray-500/80" />
-
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center w-full py-2">
+      <div className="relative w-full h-full flex items-center justify-center">
+        <div className="pointer-events-none absolute inset-0 z-0">
           <span
-            className="justify-self-end text-right pr-1"
+            className="absolute left-0 right-0 h-px bg-gray-500/70"
+            style={{ top: `calc(50% - ${SPRITZ_GUIDE_OFFSET_PX}px)` }}
+          />
+          <span
+            className="absolute left-0 right-0 h-px bg-gray-500/70"
+            style={{ top: `calc(50% + ${SPRITZ_GUIDE_OFFSET_PX}px)` }}
+          />
+          <span
+            className="absolute left-1/2 -translate-x-1/2 w-px bg-gray-500/70"
+            style={{ top: `calc(50% - ${SPRITZ_GUIDE_OFFSET_PX}px)`, height: `${SPRITZ_GUIDE_OFFSET_PX * 2}px` }}
+          />
+        </div>
+
+        <div className="relative z-10 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center w-full text-4xl md:text-6xl font-bold tracking-wide font-mono">
+          <span
+            className="justify-self-end text-right"
             style={{ ...textStyle, minWidth: `${SPRITZ_LEFT_COL_CH}ch`, color: styleForm.wordColor }}
           >
             {left}
           </span>
-          <span style={{ ...textStyle, color: styleForm.pivotColor }}>{pivot}</span>
-          <span className="justify-self-start text-left pl-1" style={{ ...textStyle, color: styleForm.wordColor }}>
+          <span style={{ ...textStyle, color: styleForm.pivotColor, backgroundColor: 'var(--bg)' }}>
+            {pivot}
+          </span>
+          <span className="justify-self-start text-left" style={{ ...textStyle, color: styleForm.wordColor }}>
             {right}
           </span>
         </div>
@@ -562,8 +584,11 @@ export default function AdminFlashEditor() {
           </button>
         </div>
 
-        <div className="mb-5 p-6 rounded-lg border border-gray-700 bg-gray-900/40 text-center min-h-32 flex items-center justify-center">
-          <div className="break-all">{renderSpritzPreview(currentWord)}</div>
+        <div
+          className="mb-5 rounded-lg border border-gray-700 text-center h-64 flex items-center justify-center overflow-hidden"
+          style={{ backgroundColor: 'var(--bg)' }}
+        >
+          <div className="w-full h-full">{renderSpritzPreview(currentWord)}</div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

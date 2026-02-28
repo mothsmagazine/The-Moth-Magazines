@@ -8,7 +8,14 @@ const AUTO_HIDE_MS = 2500
 const SPRITZ_LEFT_COL_CH = 8
 const SPRITZ_GUIDE_OFFSET_PX = 80
 const DEFAULT_PIVOT_COLOR = '#ec4899'
-const DEFAULT_WORD_COLOR = '#f3f4f6'
+function getThemeSafeDefaultWordColor() {
+  if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
+    return '#e5e7eb'
+  }
+  return '#111827'
+}
+
+const DEFAULT_WORD_COLOR = getThemeSafeDefaultWordColor()
 
 const STYLE_KEYS = [
   'pivotColor',

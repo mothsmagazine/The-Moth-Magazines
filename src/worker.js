@@ -241,13 +241,13 @@ export default {
                   wordColor:
                     typeof flashPresentation.wordColor === "string" && flashPresentation.wordColor.trim()
                       ? flashPresentation.wordColor
-                      : "#f3f4f6",
+                      : "",
                   wordStyles:
                     flashPresentation.wordStyles && typeof flashPresentation.wordStyles === "object"
                       ? flashPresentation.wordStyles
                       : {},
                 }
-              : { version: 1, wpm: 300, pivotColor: "#ec4899", wordColor: "#f3f4f6", wordStyles: {} },
+              : { version: 1, wpm: 300, pivotColor: "#ec4899", wordColor: "", wordStyles: {} },
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -351,7 +351,7 @@ export default {
                     typeof oldPost.flashPresentation?.wordColor === "string" &&
                     oldPost.flashPresentation.wordColor.trim()
                       ? oldPost.flashPresentation.wordColor
-                      : "#f3f4f6",
+                      : "",
                   wordStyles:
                     oldPost.flashPresentation?.wordStyles &&
                     typeof oldPost.flashPresentation.wordStyles === "object"
@@ -383,7 +383,7 @@ export default {
                       : typeof oldPost.flashPresentation?.wordColor === "string" &&
                           oldPost.flashPresentation.wordColor.trim()
                         ? oldPost.flashPresentation.wordColor
-                        : "#f3f4f6",
+                        : "",
                   wordStyles:
                     updates.flashPresentation?.wordStyles &&
                     typeof updates.flashPresentation.wordStyles === "object"
