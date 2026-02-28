@@ -12,13 +12,29 @@ const FONT_OPTIONS = [
   'Courier New, monospace',
 ]
 
-const STYLE_KEYS = ['pivotColor', 'wordColor', 'fontSize', 'rotation', 'fontWeight', 'fontStyle', 'fontFamily', 'fontUrl']
+const STYLE_KEYS = [
+  'pivotColor',
+  'wordColor',
+  'pivotIndexOneBased',
+  'pivotLetter',
+  'fontSize',
+  'rotation',
+  'fontWeight',
+  'fontStyle',
+  'fontFamily',
+  'fontUrl',
+]
 const DEFAULT_PIVOT_COLOR = '#ec4899'
 const DEFAULT_WORD_COLOR = '#f3f4f6'
 const DEFAULT_WPM = 300
 const SPRITZ_LEFT_COL_CH = 8
 
-function getPivotIndex(word) {
+function getPivotIndex(word, pivotIndexOneBased = '', legacyPivotLetter = '') {
+  const asNumber = Number(pivotIndexOneBased)
+  if (Number.isInteger(asNumber) && asNumber >= 1 && asNumber <= word.length) {
+    return asNumber - 1
+  }
+
   const length = word.length
   if (length <= 1) return 0
   if (length <= 5) return 1
@@ -147,6 +163,7 @@ export default function AdminFlashEditor() {
   const [styleForm, setStyleForm] = useState({
     pivotColor: DEFAULT_PIVOT_COLOR,
     wordColor: DEFAULT_WORD_COLOR,
+    pivotIndexOneBased: '',
     fontSize: 56,
     rotation: 0,
     bold: false,
@@ -207,6 +224,10 @@ export default function AdminFlashEditor() {
     setStyleForm({
       pivotColor: base.pivotColor || fallbackPivotColor,
       wordColor: base.wordColor || fallbackWordColor,
+      pivotIndexOneBased:
+        Number.isInteger(Number(base.pivotIndexOneBased)) && Number(base.pivotIndexOneBased) > 0
+          ? String(Number(base.pivotIndexOneBased))
+          : '',
       fontSize: Number(base.fontSize) || 56,
       rotation: Number(base.rotation) || 0,
       bold: base.fontWeight === '700',
@@ -272,9 +293,14 @@ export default function AdminFlashEditor() {
   }
 
   function buildStylePatch(form) {
+    const pivotIndexValue = Number(form.pivotIndexOneBased)
+    const hasValidPivotIndex = Number.isInteger(pivotIndexValue) && pivotIndexValue > 0
+
     return {
       pivotColor: form.pivotColor,
       wordColor: form.wordColor,
+      pivotIndexOneBased: hasValidPivotIndex ? pivotIndexValue : undefined,
+      pivotLetter: undefined,
       fontSize: Number(form.fontSize),
       rotation: Number(form.rotation) || 0,
       fontWeight: form.bold ? '700' : '400',
@@ -420,7 +446,7 @@ export default function AdminFlashEditor() {
   function renderSpritzPreview(word) {
     if (!word) return null
 
-    const pivotIndex = getPivotIndex(word)
+    const pivotIndex = getPivotIndex(word, styleForm.pivotIndexOneBased)
     const left = word.slice(0, pivotIndex)
     const pivot = word.charAt(pivotIndex)
     const right = word.slice(pivotIndex + 1)
@@ -557,6 +583,19 @@ export default function AdminFlashEditor() {
           </div>
 
           <div>
+            <label className="block text-sm text-gray-300 mb-1">Highlight Letter Index (1-based, optional)</label>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={styleForm.pivotIndexOneBased}
+              onChange={(e) => updateWordStyles({ pivotIndexOneBased: e.target.value })}
+              placeholder="Auto"
+              className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-gray-100"
+            />
+          </div>
+
+          <div>
             <label className="block text-sm text-gray-300 mb-1">Font Size: {styleForm.fontSize}px</label>
             <input
               type="range"
@@ -657,16 +696,13 @@ export default function AdminFlashEditor() {
               />
               Italic
             </label>
-          </div>
-
-          <div className="md:col-span-2">
             <label className="inline-flex items-center gap-2 text-gray-300">
               <input
                 type="checkbox"
                 checked={applyToAllWords}
                 onChange={(e) => setApplyToAllWords(e.target.checked)}
               />
-              Apply editor style changes to all words (instead of only current word)
+              Apply to All
             </label>
           </div>
         </div>

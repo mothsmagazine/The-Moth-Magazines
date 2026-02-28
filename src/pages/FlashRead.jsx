@@ -9,7 +9,18 @@ const SPRITZ_LEFT_COL_CH = 8
 const DEFAULT_PIVOT_COLOR = '#ec4899'
 const DEFAULT_WORD_COLOR = '#f3f4f6'
 
-const STYLE_KEYS = ['pivotColor', 'wordColor', 'fontSize', 'rotation', 'fontWeight', 'fontStyle', 'fontFamily', 'fontUrl']
+const STYLE_KEYS = [
+  'pivotColor',
+  'wordColor',
+  'pivotIndexOneBased',
+  'pivotLetter',
+  'fontSize',
+  'rotation',
+  'fontWeight',
+  'fontStyle',
+  'fontFamily',
+  'fontUrl',
+]
 
 function normalizeWordStyle(wordStyle) {
   if (!wordStyle || typeof wordStyle !== 'object') {
@@ -42,7 +53,21 @@ function buildTextStyle(base = {}) {
   }
 }
 
-function getPivotIndex(word) {
+function getPivotIndex(word, pivotIndexOneBased = '', legacyPivotLetter = '') {
+  const asNumber = Number(pivotIndexOneBased)
+  if (Number.isInteger(asNumber) && asNumber >= 1 && asNumber <= word.length) {
+    return asNumber - 1
+  }
+
+  const normalizedLegacyLetter =
+    typeof legacyPivotLetter === 'string' ? legacyPivotLetter.trim().charAt(0) : ''
+  if (normalizedLegacyLetter) {
+    const matchedIndex = word.toLowerCase().indexOf(normalizedLegacyLetter.toLowerCase())
+    if (matchedIndex >= 0) {
+      return matchedIndex
+    }
+  }
+
   const length = word.length
   if (length <= 1) return 0
   if (length <= 5) return 1
@@ -240,7 +265,7 @@ export default function FlashRead() {
   function renderSpritzWord(word) {
     if (!word) return null
 
-    const pivotIndex = getPivotIndex(word)
+    const pivotIndex = getPivotIndex(word, currentWordStyle.pivotIndexOneBased, currentWordStyle.pivotLetter)
     const left = word.slice(0, pivotIndex)
     const pivot = word.charAt(pivotIndex)
     const right = word.slice(pivotIndex + 1)
