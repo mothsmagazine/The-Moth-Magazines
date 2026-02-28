@@ -460,17 +460,22 @@ export default function AdminFlashEditor() {
     })
 
     return (
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center w-full max-w-lg">
-        <span
-          className="justify-self-end text-right pr-1"
-          style={{ ...textStyle, minWidth: `${SPRITZ_LEFT_COL_CH}ch`, color: styleForm.wordColor }}
-        >
-          {left}
-        </span>
-        <span style={{ ...textStyle, color: styleForm.pivotColor }}>{pivot}</span>
-        <span className="justify-self-start text-left pl-1" style={{ ...textStyle, color: styleForm.wordColor }}>
-          {right}
-        </span>
+      <div className="relative w-full max-w-lg">
+        <span className="absolute left-1/2 -translate-x-1/2 top-0 w-8 h-px bg-gray-500/80" />
+        <span className="absolute left-1/2 -translate-x-1/2 bottom-0 w-8 h-px bg-gray-500/80" />
+
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center w-full py-2">
+          <span
+            className="justify-self-end text-right pr-1"
+            style={{ ...textStyle, minWidth: `${SPRITZ_LEFT_COL_CH}ch`, color: styleForm.wordColor }}
+          >
+            {left}
+          </span>
+          <span style={{ ...textStyle, color: styleForm.pivotColor }}>{pivot}</span>
+          <span className="justify-self-start text-left pl-1" style={{ ...textStyle, color: styleForm.wordColor }}>
+            {right}
+          </span>
+        </div>
       </div>
     )
   }
@@ -583,7 +588,7 @@ export default function AdminFlashEditor() {
           </div>
 
           <div>
-            <label className="block text-sm text-gray-300 mb-1">Highlight Letter Index (1-based, optional)</label>
+            <label className="block text-sm text-gray-300 mb-1">Highlight Letter Index</label>
             <input
               type="number"
               min="1"

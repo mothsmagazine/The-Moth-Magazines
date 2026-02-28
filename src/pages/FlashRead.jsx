@@ -6,6 +6,7 @@ import { extractFlashWords } from '../utils/flashWords'
 const FIXED_WPM = 300
 const AUTO_HIDE_MS = 2500
 const SPRITZ_LEFT_COL_CH = 8
+const SPRITZ_GUIDE_OFFSET_PX = 80
 const DEFAULT_PIVOT_COLOR = '#ec4899'
 const DEFAULT_WORD_COLOR = '#f3f4f6'
 
@@ -273,13 +274,15 @@ export default function FlashRead() {
     return (
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center w-full max-w-lg">
         <span
-          className="justify-self-end text-right pr-1"
+          className="justify-self-end text-right"
           style={{ ...textStyle, minWidth: `${SPRITZ_LEFT_COL_CH}ch`, color: wordColor }}
         >
           {left}
         </span>
-        <span style={{ ...textStyle, color: pivotColor }}>{pivot}</span>
-        <span className="justify-self-start text-left pl-1" style={{ ...textStyle, color: wordColor }}>
+        <span style={{ ...textStyle, color: pivotColor, backgroundColor: 'var(--bg)' }}>
+          {pivot}
+        </span>
+        <span className="justify-self-start text-left" style={{ ...textStyle, color: wordColor }}>
           {right}
         </span>
       </div>
@@ -334,6 +337,21 @@ export default function FlashRead() {
         onTouchEnd={handleCenterTouchEnd}
         className={`absolute inset-0 flex items-center justify-center ${isPlaying ? 'cursor-pointer' : ''}`}
       >
+        <div className="pointer-events-none absolute inset-0 z-0">
+          <span
+            className="absolute left-0 right-0 h-px bg-gray-500/70"
+            style={{ top: `calc(50% - ${SPRITZ_GUIDE_OFFSET_PX}px)` }}
+          />
+          <span
+            className="absolute left-0 right-0 h-px bg-gray-500/70"
+            style={{ top: `calc(50% + ${SPRITZ_GUIDE_OFFSET_PX}px)` }}
+          />
+          <span 
+            className="absolute left-1/2 -translate-x-1/2 w-px bg-gray-500/70" 
+            style={{ top: `calc(50% - ${SPRITZ_GUIDE_OFFSET_PX}px)`, height: `${SPRITZ_GUIDE_OFFSET_PX * 2}px` }}
+          />
+        </div>
+
         <div className="overflow-visible w-full flex justify-center px-2">
           <div className="h-20 flex items-center justify-center overflow-visible text-4xl md:text-6xl font-bold text-gray-100 tracking-wide font-mono">
             {renderSpritzWord(currentWord)}
