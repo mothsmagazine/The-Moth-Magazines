@@ -491,7 +491,7 @@ export default function AdminFlashEditor() {
           >
             {left}
           </span>
-          <span style={{ ...textStyle, color: styleForm.pivotColor, backgroundColor: 'var(--bg)' }}>
+          <span className='z-100' style={{ ...textStyle, color: styleForm.pivotColor, backgroundColor: 'var(--bg)' }}>
             {pivot}
           </span>
           <span className="justify-self-start text-left" style={{ ...textStyle, color: styleForm.wordColor }}>

@@ -286,7 +286,7 @@ export default function FlashRead() {
         >
           {left}
         </span>
-        <span style={{ ...textStyle, color: pivotColor, backgroundColor: 'var(--bg)' }}>
+        <span className='z-100' style={{ ...textStyle, color: pivotColor, backgroundColor: 'var(--bg)' }}>
           {pivot}
         </span>
         <span className="justify-self-start text-left" style={{ ...textStyle, color: wordColor }}>
