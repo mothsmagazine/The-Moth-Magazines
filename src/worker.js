@@ -234,12 +234,20 @@ export default {
                     Number.isFinite(Number(flashPresentation.wpm)) && Number(flashPresentation.wpm) > 0
                       ? Number(flashPresentation.wpm)
                       : 300,
+                  pivotColor:
+                    typeof flashPresentation.pivotColor === "string" && flashPresentation.pivotColor.trim()
+                      ? flashPresentation.pivotColor
+                      : "#ec4899",
+                  wordColor:
+                    typeof flashPresentation.wordColor === "string" && flashPresentation.wordColor.trim()
+                      ? flashPresentation.wordColor
+                      : "#f3f4f6",
                   wordStyles:
                     flashPresentation.wordStyles && typeof flashPresentation.wordStyles === "object"
                       ? flashPresentation.wordStyles
                       : {},
                 }
-              : { version: 1, wpm: 300, wordStyles: {} },
+              : { version: 1, wpm: 300, pivotColor: "#ec4899", wordColor: "#f3f4f6", wordStyles: {} },
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -334,6 +342,16 @@ export default {
                     Number(oldPost.flashPresentation?.wpm) > 0
                       ? Number(oldPost.flashPresentation.wpm)
                       : 300,
+                  pivotColor:
+                    typeof oldPost.flashPresentation?.pivotColor === "string" &&
+                    oldPost.flashPresentation.pivotColor.trim()
+                      ? oldPost.flashPresentation.pivotColor
+                      : "#ec4899",
+                  wordColor:
+                    typeof oldPost.flashPresentation?.wordColor === "string" &&
+                    oldPost.flashPresentation.wordColor.trim()
+                      ? oldPost.flashPresentation.wordColor
+                      : "#f3f4f6",
                   wordStyles:
                     oldPost.flashPresentation?.wordStyles &&
                     typeof oldPost.flashPresentation.wordStyles === "object"
@@ -350,6 +368,22 @@ export default {
                           Number(oldPost.flashPresentation?.wpm) > 0
                         ? Number(oldPost.flashPresentation.wpm)
                         : 300,
+                  pivotColor:
+                    typeof updates.flashPresentation?.pivotColor === "string" &&
+                    updates.flashPresentation.pivotColor.trim()
+                      ? updates.flashPresentation.pivotColor
+                      : typeof oldPost.flashPresentation?.pivotColor === "string" &&
+                          oldPost.flashPresentation.pivotColor.trim()
+                        ? oldPost.flashPresentation.pivotColor
+                        : "#ec4899",
+                  wordColor:
+                    typeof updates.flashPresentation?.wordColor === "string" &&
+                    updates.flashPresentation.wordColor.trim()
+                      ? updates.flashPresentation.wordColor
+                      : typeof oldPost.flashPresentation?.wordColor === "string" &&
+                          oldPost.flashPresentation.wordColor.trim()
+                        ? oldPost.flashPresentation.wordColor
+                        : "#f3f4f6",
                   wordStyles:
                     updates.flashPresentation?.wordStyles &&
                     typeof updates.flashPresentation.wordStyles === "object"

@@ -5,11 +5,15 @@ import { extractFlashWords } from '../utils/flashWords'
 
 const FIXED_WPM = 300
 const AUTO_HIDE_MS = 2500
-const STYLE_KEYS = ['color', 'fontSize', 'rotation', 'fontWeight', 'fontStyle', 'fontFamily', 'fontUrl']
+const SPRITZ_LEFT_COL_CH = 8
+const DEFAULT_PIVOT_COLOR = '#ec4899'
+const DEFAULT_WORD_COLOR = '#f3f4f6'
+
+const STYLE_KEYS = ['pivotColor', 'wordColor', 'fontSize', 'rotation', 'fontWeight', 'fontStyle', 'fontFamily', 'fontUrl']
 
 function normalizeWordStyle(wordStyle) {
   if (!wordStyle || typeof wordStyle !== 'object') {
-    return { base: {}, segments: [] }
+    return { base: {} }
   }
 
   const baseFromRoot = {}
@@ -19,52 +23,32 @@ function normalizeWordStyle(wordStyle) {
     }
   })
 
-  const base = {
-    ...(wordStyle.base && typeof wordStyle.base === 'object' ? wordStyle.base : {}),
-    ...baseFromRoot,
-  }
-
-  const segments = Array.isArray(wordStyle.segments)
-    ? wordStyle.segments
-        .filter((segment) => segment && typeof segment === 'object')
-        .map((segment) => ({
-          start: Number(segment.start),
-          end: Number(segment.end),
-          style: segment.style && typeof segment.style === 'object' ? segment.style : {},
-        }))
-        .filter((segment) => Number.isFinite(segment.start) && Number.isFinite(segment.end) && segment.end > segment.start)
-    : []
-
-  return { base, segments }
-}
-
-function buildInlineStyle(style = {}) {
   return {
-    color: style.color,
-    fontSize: style.fontSize ? `${style.fontSize}px` : undefined,
-    transform: style.rotation !== undefined ? `rotate(${style.rotation}deg)` : undefined,
-    display: style.rotation !== undefined ? 'inline-block' : undefined,
-    fontWeight: style.fontWeight,
-    fontStyle: style.fontStyle,
-    fontFamily: style.fontFamily,
+    base: {
+      ...(wordStyle.base && typeof wordStyle.base === 'object' ? wordStyle.base : {}),
+      ...baseFromRoot,
+    },
   }
 }
 
-function collectGoogleFontUrls(wordStyles = {}) {
-  const urls = new Set()
+function buildTextStyle(base = {}) {
+  return {
+    fontSize: Number(base.fontSize) ? `${Number(base.fontSize)}px` : undefined,
+    transform: base.rotation !== undefined ? `rotate(${Number(base.rotation) || 0}deg)` : undefined,
+    display: base.rotation !== undefined ? 'inline-block' : undefined,
+    fontWeight: base.fontWeight,
+    fontStyle: base.fontStyle,
+    fontFamily: base.fontFamily,
+  }
+}
 
-  Object.values(wordStyles).forEach((styleConfig) => {
-    const { base, segments } = normalizeWordStyle(styleConfig)
-    if (base.fontUrl) urls.add(base.fontUrl)
-
-    segments.forEach((segment) => {
-      if (segment.style?.fontUrl) {
-        urls.add(segment.style.fontUrl)
-      }
-    })
-  })
-
-  return Array.from(urls)
+function getPivotIndex(word) {
+  const length = word.length
+  if (length <= 1) return 0
+  if (length <= 5) return 1
+  if (length <= 9) return 2
+  if (length <= 13) return 3
+  return 4
 }
 
 export default function FlashRead() {
@@ -101,29 +85,26 @@ export default function FlashRead() {
   }, [id])
 
   const words = useMemo(() => extractFlashWords(post?.body), [post?.body])
-  const currentWordStyle = post?.flashPresentation?.wordStyles?.[wordIndex] || {}
   const currentWord = words[wordIndex] || 'No words available'
+  const currentWordStyle = normalizeWordStyle(post?.flashPresentation?.wordStyles?.[wordIndex]).base
   const effectiveWpm =
     Number.isFinite(Number(post?.flashPresentation?.wpm)) && Number(post?.flashPresentation?.wpm) > 0
       ? Number(post.flashPresentation.wpm)
       : FIXED_WPM
+  const pivotColor =
+    typeof currentWordStyle.pivotColor === 'string' && currentWordStyle.pivotColor.trim()
+      ? currentWordStyle.pivotColor
+      : typeof post?.flashPresentation?.pivotColor === 'string' && post.flashPresentation.pivotColor.trim()
+        ? post.flashPresentation.pivotColor
+        : DEFAULT_PIVOT_COLOR
+  const wordColor =
+    typeof currentWordStyle.wordColor === 'string' && currentWordStyle.wordColor.trim()
+      ? currentWordStyle.wordColor
+      : typeof post?.flashPresentation?.wordColor === 'string' && post.flashPresentation.wordColor.trim()
+        ? post.flashPresentation.wordColor
+        : DEFAULT_WORD_COLOR
+  const textStyle = buildTextStyle(currentWordStyle)
   const delay = Math.max(50, Math.floor(60000 / effectiveWpm))
-
-  useEffect(() => {
-    const urls = collectGoogleFontUrls(post?.flashPresentation?.wordStyles || {})
-
-    urls.forEach((url) => {
-      const selector = `link[data-google-font-url="${url.replace(/"/g, '\\"')}"]`
-      const exists = document.head.querySelector(selector)
-      if (!exists) {
-        const link = document.createElement('link')
-        link.rel = 'stylesheet'
-        link.href = url
-        link.setAttribute('data-google-font-url', url)
-        document.head.appendChild(link)
-      }
-    })
-  }, [post])
 
   useEffect(() => {
     if (!isPlaying || words.length === 0) return
@@ -256,32 +237,28 @@ export default function FlashRead() {
     }
   }, [isPlaying])
 
-  function renderStyledCurrentWord(word, styleConfig) {
-    const { base, segments } = normalizeWordStyle(styleConfig)
+  function renderSpritzWord(word) {
     if (!word) return null
 
-    if (segments.length === 0) {
-      return (
-        <span className="leading-none" style={buildInlineStyle(base)}>
-          {word}
-        </span>
-      )
-    }
+    const pivotIndex = getPivotIndex(word)
+    const left = word.slice(0, pivotIndex)
+    const pivot = word.charAt(pivotIndex)
+    const right = word.slice(pivotIndex + 1)
 
-    return word.split('').map((char, index) => {
-      let mergedStyle = { ...base }
-      segments.forEach((segment) => {
-        if (index >= segment.start && index < segment.end) {
-          mergedStyle = { ...mergedStyle, ...segment.style }
-        }
-      })
-
-      return (
-        <span key={`${char}-${index}`} className="leading-none inline-block" style={buildInlineStyle(mergedStyle)}>
-          {char}
+    return (
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center w-full max-w-lg">
+        <span
+          className="justify-self-end text-right pr-1"
+          style={{ ...textStyle, minWidth: `${SPRITZ_LEFT_COL_CH}ch`, color: wordColor }}
+        >
+          {left}
         </span>
-      )
-    })
+        <span style={{ ...textStyle, color: pivotColor }}>{pivot}</span>
+        <span className="justify-self-start text-left pl-1" style={{ ...textStyle, color: wordColor }}>
+          {right}
+        </span>
+      </div>
+    )
   }
 
   if (loading) {
@@ -332,11 +309,9 @@ export default function FlashRead() {
         onTouchEnd={handleCenterTouchEnd}
         className={`absolute inset-0 flex items-center justify-center ${isPlaying ? 'cursor-pointer' : ''}`}
       >
-        <div className="text-center overflow-visible">
-          <div className="h-20 flex items-center justify-center overflow-visible">
-            <span className="text-4xl md:text-6xl font-bold text-gray-100 tracking-wide">
-              {renderStyledCurrentWord(currentWord, currentWordStyle)}
-            </span>
+        <div className="overflow-visible w-full flex justify-center px-2">
+          <div className="h-20 flex items-center justify-center overflow-visible text-4xl md:text-6xl font-bold text-gray-100 tracking-wide font-mono">
+            {renderSpritzWord(currentWord)}
           </div>
         </div>
       </div>

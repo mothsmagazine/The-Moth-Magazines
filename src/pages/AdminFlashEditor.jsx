@@ -12,7 +12,20 @@ const FONT_OPTIONS = [
   'Courier New, monospace',
 ]
 
-const STYLE_KEYS = ['color', 'fontSize', 'rotation', 'fontWeight', 'fontStyle', 'fontFamily', 'fontUrl']
+const STYLE_KEYS = ['pivotColor', 'wordColor', 'fontSize', 'rotation', 'fontWeight', 'fontStyle', 'fontFamily', 'fontUrl']
+const DEFAULT_PIVOT_COLOR = '#ec4899'
+const DEFAULT_WORD_COLOR = '#f3f4f6'
+const DEFAULT_WPM = 300
+const SPRITZ_LEFT_COL_CH = 8
+
+function getPivotIndex(word) {
+  const length = word.length
+  if (length <= 1) return 0
+  if (length <= 5) return 1
+  if (length <= 9) return 2
+  if (length <= 13) return 3
+  return 4
+}
 
 function normalizeWordStyle(wordStyle) {
   if (!wordStyle || typeof wordStyle !== 'object') {
@@ -26,34 +39,23 @@ function normalizeWordStyle(wordStyle) {
     }
   })
 
-  const base = {
-    ...(wordStyle.base && typeof wordStyle.base === 'object' ? wordStyle.base : {}),
-    ...baseFromRoot,
+  return {
+    base: {
+      ...(wordStyle.base && typeof wordStyle.base === 'object' ? wordStyle.base : {}),
+      ...baseFromRoot,
+    },
+    segments: [],
   }
-
-  const segments = Array.isArray(wordStyle.segments)
-    ? wordStyle.segments
-        .filter((segment) => segment && typeof segment === 'object')
-        .map((segment) => ({
-          start: Number(segment.start),
-          end: Number(segment.end),
-          style: segment.style && typeof segment.style === 'object' ? segment.style : {},
-        }))
-        .filter((segment) => Number.isFinite(segment.start) && Number.isFinite(segment.end) && segment.end > segment.start)
-    : []
-
-  return { base, segments }
 }
 
-function buildInlineStyle(style = {}) {
+function buildTextStyle(base = {}) {
   return {
-    color: style.color,
-    fontSize: style.fontSize ? `${style.fontSize}px` : undefined,
-    transform: style.rotation !== undefined ? `rotate(${style.rotation}deg)` : undefined,
-    display: style.rotation !== undefined ? 'inline-block' : undefined,
-    fontWeight: style.fontWeight,
-    fontStyle: style.fontStyle,
-    fontFamily: style.fontFamily,
+    fontSize: Number(base.fontSize) ? `${Number(base.fontSize)}px` : undefined,
+    transform: base.rotation !== undefined ? `rotate(${Number(base.rotation) || 0}deg)` : undefined,
+    display: base.rotation !== undefined ? 'inline-block' : undefined,
+    fontWeight: base.fontWeight,
+    fontStyle: base.fontStyle,
+    fontFamily: base.fontFamily,
   }
 }
 
@@ -74,28 +76,23 @@ function parseGoogleFontFamily(url) {
 }
 
 function extractGoogleFontStylesheetUrl(input) {
-  // 1. Clean up the input: remove code blocks and handle smart quotes
   const raw = input
     .replace(/```[\s\S]*?\n?|```/g, '')
     .replace(/[“”]/g, '"')
     .replace(/[‘’]/g, "'")
-    .replace(/&amp;/g, '&') // Normalize ampersands immediately
+    .replace(/&amp;/g, '&')
     .trim()
 
   if (!raw) return null
 
-  // 2. Try to find a direct URL match first (this is the most reliable)
-  // This regex specifically looks for the fonts.googleapis.com URL inside any text
   const directGoogleUrlMatch = raw.match(/https?:\/\/fonts\.googleapis\.com\/css2\?[^\s"'<>]+/i)
   if (directGoogleUrlMatch) {
     return directGoogleUrlMatch[0]
   }
 
-  // 3. Robust DOM Parsing fallback
   try {
     const parser = new DOMParser()
     const doc = parser.parseFromString(raw, 'text/html')
-    // Look for any link tag that contains 'fonts.googleapis.com' in the href
     const links = Array.from(doc.querySelectorAll('link'))
     for (const link of links) {
       const href = link.getAttribute('href')
@@ -103,11 +100,10 @@ function extractGoogleFontStylesheetUrl(input) {
         return href
       }
     }
-  } catch (e) {
-    console.error("DOM Parsing failed", e)
+  } catch {
+    return null
   }
 
-  // 4. Regex fallback for href specifically if DOMParser missed it
   const hrefMatch = raw.match(/href=["'](https?:\/\/fonts\.googleapis\.com\/[^"']+)["']/i)
   if (hrefMatch) {
     return hrefMatch[1]
@@ -120,20 +116,10 @@ function collectCustomFontsFromWordStyles(wordStyles = {}) {
   const map = new Map()
 
   Object.values(wordStyles).forEach((styleConfig) => {
-    const { base, segments } = normalizeWordStyle(styleConfig)
-
+    const { base } = normalizeWordStyle(styleConfig)
     if (base.fontUrl && base.fontFamily) {
       map.set(base.fontUrl, { family: base.fontFamily, url: base.fontUrl })
     }
-
-    segments.forEach((segment) => {
-      if (segment.style?.fontUrl && segment.style?.fontFamily) {
-        map.set(segment.style.fontUrl, {
-          family: segment.style.fontFamily,
-          url: segment.style.fontUrl,
-        })
-      }
-    })
   })
 
   return Array.from(map.values())
@@ -146,18 +132,21 @@ export default function AdminFlashEditor() {
   const [post, setPost] = useState(null)
   const [wordStyles, setWordStyles] = useState({})
   const [savedWordStyles, setSavedWordStyles] = useState({})
-  const [wpm, setWpm] = useState(300)
-  const [savedWpm, setSavedWpm] = useState(300)
+  const [wpm, setWpm] = useState(DEFAULT_WPM)
+  const [savedWpm, setSavedWpm] = useState(DEFAULT_WPM)
+  const [fallbackPivotColor, setFallbackPivotColor] = useState(DEFAULT_PIVOT_COLOR)
+  const [fallbackWordColor, setFallbackWordColor] = useState(DEFAULT_WORD_COLOR)
+  const [applyToAllWords, setApplyToAllWords] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
-  const [selectionRange, setSelectionRange] = useState({ start: 0, end: 0 })
   const [customFonts, setCustomFonts] = useState([])
 
   const [styleForm, setStyleForm] = useState({
-    color: '#ffffff',
+    pivotColor: DEFAULT_PIVOT_COLOR,
+    wordColor: DEFAULT_WORD_COLOR,
     fontSize: 56,
     rotation: 0,
     bold: false,
@@ -184,7 +173,15 @@ export default function AdminFlashEditor() {
         const loadedWpm =
           Number.isFinite(Number(data.post.flashPresentation?.wpm)) && Number(data.post.flashPresentation?.wpm) > 0
             ? Number(data.post.flashPresentation.wpm)
-            : 300
+            : DEFAULT_WPM
+        const loadedFallbackPivotColor =
+          typeof data.post.flashPresentation?.pivotColor === 'string' && data.post.flashPresentation.pivotColor.trim()
+            ? data.post.flashPresentation.pivotColor
+            : DEFAULT_PIVOT_COLOR
+        const loadedFallbackWordColor =
+          typeof data.post.flashPresentation?.wordColor === 'string' && data.post.flashPresentation.wordColor.trim()
+            ? data.post.flashPresentation.wordColor
+            : DEFAULT_WORD_COLOR
 
         setPost(data.post)
         setWordStyles(styles)
@@ -192,6 +189,8 @@ export default function AdminFlashEditor() {
         setCustomFonts(discoveredCustomFonts)
         setWpm(loadedWpm)
         setSavedWpm(loadedWpm)
+        setFallbackPivotColor(loadedFallbackPivotColor)
+        setFallbackWordColor(loadedFallbackWordColor)
       } catch (err) {
         setError(err.message)
       } finally {
@@ -206,7 +205,8 @@ export default function AdminFlashEditor() {
     const { base } = normalizeWordStyle(wordStyles[currentIndex])
 
     setStyleForm({
-      color: base.color || '#ffffff',
+      pivotColor: base.pivotColor || fallbackPivotColor,
+      wordColor: base.wordColor || fallbackWordColor,
       fontSize: Number(base.fontSize) || 56,
       rotation: Number(base.rotation) || 0,
       bold: base.fontWeight === '700',
@@ -214,7 +214,7 @@ export default function AdminFlashEditor() {
       fontFamily: base.fontFamily || 'inherit',
       fontUrl: base.fontUrl || '',
     })
-  }, [currentIndex, wordStyles])
+  }, [currentIndex, wordStyles, fallbackPivotColor, fallbackWordColor])
 
   useEffect(() => {
     customFonts.forEach((font) => {
@@ -230,10 +230,6 @@ export default function AdminFlashEditor() {
       }
     })
   }, [customFonts])
-
-  useEffect(() => {
-    setSelectionRange({ start: 0, end: 0 })
-  }, [currentIndex])
 
   useEffect(() => {
     const handleBeforeUnload = (event) => {
@@ -275,52 +271,40 @@ export default function AdminFlashEditor() {
     navigate(path)
   }
 
-  function updateCurrentWordStyle(changes) {
+  function buildStylePatch(form) {
+    return {
+      pivotColor: form.pivotColor,
+      wordColor: form.wordColor,
+      fontSize: Number(form.fontSize),
+      rotation: Number(form.rotation) || 0,
+      fontWeight: form.bold ? '700' : '400',
+      fontStyle: form.italic ? 'italic' : 'normal',
+      fontFamily: form.fontFamily,
+      fontUrl: form.fontUrl || undefined,
+    }
+  }
+
+  function updateWordStyles(changes) {
     setStyleForm((prevForm) => {
       const nextForm = { ...prevForm, ...changes }
+      const stylePatch = buildStylePatch(nextForm)
 
-      const stylePatch = {
-        color: nextForm.color,
-        fontSize: Number(nextForm.fontSize),
-        rotation: Number(nextForm.rotation) || 0,
-        fontWeight: nextForm.bold ? '700' : '400',
-        fontStyle: nextForm.italic ? 'italic' : 'normal',
-        fontFamily: nextForm.fontFamily,
-        fontUrl: nextForm.fontUrl || undefined,
-      }
+      setWordStyles((prevStyles) => {
+        if (words.length === 0) return prevStyles
 
-      setWordStyles((prevStyles) => ({
-        ...prevStyles,
-        [currentIndex]: (() => {
-          const currentWord = words[currentIndex] || ''
-          const { base, segments } = normalizeWordStyle(prevStyles[currentIndex])
-          const hasSelection =
-            selectionRange.end > selectionRange.start && selectionRange.start >= 0 && selectionRange.end <= currentWord.length
+        const nextStyles = { ...prevStyles }
+        const targetIndices = applyToAllWords ? words.map((_, index) => index) : [currentIndex]
 
-          if (!hasSelection) {
-            return {
-              base: { ...base, ...stylePatch },
-              segments,
-            }
+        targetIndices.forEach((targetIndex) => {
+          const { base } = normalizeWordStyle(nextStyles[targetIndex])
+          nextStyles[targetIndex] = {
+            base: { ...base, ...stylePatch },
+            segments: [],
           }
+        })
 
-          const nextSegments = [
-            ...segments.filter(
-              (segment) => !(segment.start === selectionRange.start && segment.end === selectionRange.end),
-            ),
-            {
-              start: selectionRange.start,
-              end: selectionRange.end,
-              style: stylePatch,
-            },
-          ]
-
-          return {
-            base,
-            segments: nextSegments,
-          }
-        })(),
-      }))
+        return nextStyles
+      })
 
       return nextForm
     })
@@ -328,11 +312,16 @@ export default function AdminFlashEditor() {
 
   function clearCurrentWordStyle() {
     setWordStyles((prev) => {
+      if (applyToAllWords) {
+        return {}
+      }
+
       const next = { ...prev }
       delete next[currentIndex]
       return next
     })
-    setMessage(`Style cleared for word #${currentIndex + 1}`)
+
+    setMessage(applyToAllWords ? 'Style cleared for all words.' : `Style cleared for word #${currentIndex + 1}`)
   }
 
   function applyCurrentStyleToNextAndMove() {
@@ -342,20 +331,18 @@ export default function AdminFlashEditor() {
     }
 
     const nextIndex = currentIndex + 1
-    const nextStyle = {
-      color: styleForm.color,
-      fontSize: Number(styleForm.fontSize),
-      rotation: Number(styleForm.rotation) || 0,
-      fontWeight: styleForm.bold ? '700' : '400',
-      fontStyle: styleForm.italic ? 'italic' : 'normal',
-      fontFamily: styleForm.fontFamily,
-      fontUrl: styleForm.fontUrl || undefined,
-    }
+    const nextStylePatch = buildStylePatch(styleForm)
 
-    setWordStyles((prevStyles) => ({
-      ...prevStyles,
-      [nextIndex]: nextStyle,
-    }))
+    setWordStyles((prevStyles) => {
+      const nextStyles = { ...prevStyles }
+      const { base } = normalizeWordStyle(nextStyles[nextIndex])
+      nextStyles[nextIndex] = {
+        base: { ...base, ...nextStylePatch },
+        segments: [],
+      }
+      return nextStyles
+    })
+
     setCurrentIndex(nextIndex)
     setMessage(`Applied style to word #${nextIndex + 1} and moved forward.`)
   }
@@ -373,6 +360,8 @@ export default function AdminFlashEditor() {
           flashPresentation: {
             version: 1,
             wpm,
+            pivotColor: fallbackPivotColor,
+            wordColor: fallbackWordColor,
             wordStyles,
           },
         }),
@@ -423,8 +412,41 @@ export default function AdminFlashEditor() {
 
     setError('')
     setMessage(`Added Google Font: ${family}`)
-    setTimeout(() => setMessage(''), 3000);
-    updateCurrentWordStyle({ fontFamily: family, fontUrl: extractedUrl })
+    setTimeout(() => setMessage(''), 3000)
+
+    updateWordStyles({ fontFamily: family, fontUrl: extractedUrl })
+  }
+
+  function renderSpritzPreview(word) {
+    if (!word) return null
+
+    const pivotIndex = getPivotIndex(word)
+    const left = word.slice(0, pivotIndex)
+    const pivot = word.charAt(pivotIndex)
+    const right = word.slice(pivotIndex + 1)
+
+    const textStyle = buildTextStyle({
+      fontSize: styleForm.fontSize,
+      rotation: styleForm.rotation,
+      fontWeight: styleForm.bold ? '700' : '400',
+      fontStyle: styleForm.italic ? 'italic' : 'normal',
+      fontFamily: styleForm.fontFamily,
+    })
+
+    return (
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center w-full max-w-lg">
+        <span
+          className="justify-self-end text-right pr-1"
+          style={{ ...textStyle, minWidth: `${SPRITZ_LEFT_COL_CH}ch`, color: styleForm.wordColor }}
+        >
+          {left}
+        </span>
+        <span style={{ ...textStyle, color: styleForm.pivotColor }}>{pivot}</span>
+        <span className="justify-self-start text-left pl-1" style={{ ...textStyle, color: styleForm.wordColor }}>
+          {right}
+        </span>
+      </div>
+    )
   }
 
   const builtinOptions = FONT_OPTIONS.map((font) => ({
@@ -433,16 +455,16 @@ export default function AdminFlashEditor() {
     family: font,
     url: '',
   }))
+
   const customOptions = customFonts.map((font) => ({
     key: `custom:${font.url}`,
     label: `${font.family} (Google Font)`,
     family: font.family,
     url: font.url,
   }))
+
   const fontOptions = [...builtinOptions, ...customOptions]
-  const selectedFontKey = styleForm.fontUrl
-    ? `custom:${styleForm.fontUrl}`
-    : `builtin:${styleForm.fontFamily}`
+  const selectedFontKey = styleForm.fontUrl ? `custom:${styleForm.fontUrl}` : `builtin:${styleForm.fontFamily}`
 
   if (loading) {
     return (
@@ -468,49 +490,21 @@ export default function AdminFlashEditor() {
 
   const currentWord = words[currentIndex] || '(no word)'
 
-  function renderStyledWordPreview(word, styleConfig) {
-    const { base, segments } = normalizeWordStyle(styleConfig)
-    if (!word) return null
-
-    if (segments.length === 0) {
-      return (
-        <span style={buildInlineStyle(base)} className="leading-none inline-block">
-          {word}
-        </span>
-      )
-    }
-
-    return word.split('').map((char, index) => {
-      let mergedStyle = { ...base }
-      segments.forEach((segment) => {
-        if (index >= segment.start && index < segment.end) {
-          mergedStyle = { ...mergedStyle, ...segment.style }
-        }
-      })
-
-      return (
-        <span key={`${char}-${index}`} style={buildInlineStyle(mergedStyle)} className="leading-none inline-block">
-          {char}
-        </span>
-      )
-    })
-  }
-
   return (
     <section className="max-w-4xl mx-auto py-10 px-3 sm:px-4 space-y-6">
       <div className="flex flex-row w-full justify-between">
-          <button
-            onClick={() => navigateWithUnsavedCheck(`/admin/edit/${id}`)}
-            className="text-sm text-pink-400 hover:text-pink-300 transition"
-          >
-            &larr; Back to Post Editor
-          </button>
-          <button
-            onClick={() => navigateWithUnsavedCheck(`/flash-read/${id}`)}
-            className="text-sm px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition w-fit"
-          >
-            Preview Flash Reader
-          </button>
+        <button
+          onClick={() => navigateWithUnsavedCheck(`/admin/edit/${id}`)}
+          className="text-sm text-pink-400 hover:text-pink-300 transition"
+        >
+          &larr; Back to Post Editor
+        </button>
+        <button
+          onClick={() => navigateWithUnsavedCheck(`/flash-read/${id}`)}
+          className="text-sm px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition w-fit"
+        >
+          Preview Flash Reader
+        </button>
       </div>
 
       <div>
@@ -538,36 +532,26 @@ export default function AdminFlashEditor() {
         </div>
 
         <div className="mb-5 p-6 rounded-lg border border-gray-700 bg-gray-900/40 text-center min-h-32 flex items-center justify-center">
-          <div className="break-all">{renderStyledWordPreview(currentWord, wordStyles[currentIndex])}</div>
-        </div>
-
-        <div className="mb-5">
-          <label className="block text-sm text-gray-300 mb-1">Select part of current word (optional)</label>
-          <input
-            type="text"
-            value={currentWord}
-            readOnly
-            onSelect={(e) => {
-              const start = e.target.selectionStart ?? 0
-              const end = e.target.selectionEnd ?? 0
-              setSelectionRange({ start, end })
-            }}
-            className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-gray-100 font-mono"
-          />
-          <p className="text-xs text-gray-400 mt-1">
-            {selectionRange.end > selectionRange.start
-              ? `Selected characters: ${selectionRange.start + 1}-${selectionRange.end}`
-              : 'No selection: style changes apply to the whole word.'}
-          </p>
+          <div className="break-all">{renderSpritzPreview(currentWord)}</div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm text-gray-300 mb-1">Color</label>
+            <label className="block text-sm text-gray-300 mb-1">Pivot Highlight Color</label>
             <input
               type="color"
-              value={styleForm.color}
-              onChange={(e) => updateCurrentWordStyle({ color: e.target.value })}
+              value={styleForm.pivotColor}
+              onChange={(e) => updateWordStyles({ pivotColor: e.target.value })}
+              className="w-full h-10 rounded bg-gray-700 border border-gray-600"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">General Word Color</label>
+            <input
+              type="color"
+              value={styleForm.wordColor}
+              onChange={(e) => updateWordStyles({ wordColor: e.target.value })}
               className="w-full h-10 rounded bg-gray-700 border border-gray-600"
             />
           </div>
@@ -580,7 +564,7 @@ export default function AdminFlashEditor() {
               max="180"
               step="1"
               value={styleForm.fontSize}
-              onChange={(e) => updateCurrentWordStyle({ fontSize: Number(e.target.value) })}
+              onChange={(e) => updateWordStyles({ fontSize: Number(e.target.value) })}
               className="w-full"
             />
           </div>
@@ -608,7 +592,7 @@ export default function AdminFlashEditor() {
               <label className="block text-sm text-gray-300">Rotation: {styleForm.rotation}°</label>
               <button
                 type="button"
-                onClick={() => updateCurrentWordStyle({ rotation: 0 })}
+                onClick={() => updateWordStyles({ rotation: 0 })}
                 className="text-xs px-2 py-1 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-200"
               >
                 Reset 0°
@@ -620,7 +604,7 @@ export default function AdminFlashEditor() {
               max="180"
               step="1"
               value={styleForm.rotation}
-              onChange={(e) => updateCurrentWordStyle({ rotation: Number(e.target.value) })}
+              onChange={(e) => updateWordStyles({ rotation: Number(e.target.value) })}
               className="w-full"
             />
           </div>
@@ -641,7 +625,7 @@ export default function AdminFlashEditor() {
               onChange={(e) => {
                 const selected = fontOptions.find((option) => option.key === e.target.value)
                 if (!selected) return
-                updateCurrentWordStyle({
+                updateWordStyles({
                   fontFamily: selected.family,
                   fontUrl: selected.url,
                 })
@@ -661,7 +645,7 @@ export default function AdminFlashEditor() {
               <input
                 type="checkbox"
                 checked={styleForm.bold}
-                onChange={(e) => updateCurrentWordStyle({ bold: e.target.checked })}
+                onChange={(e) => updateWordStyles({ bold: e.target.checked })}
               />
               Bold
             </label>
@@ -669,9 +653,20 @@ export default function AdminFlashEditor() {
               <input
                 type="checkbox"
                 checked={styleForm.italic}
-                onChange={(e) => updateCurrentWordStyle({ italic: e.target.checked })}
+                onChange={(e) => updateWordStyles({ italic: e.target.checked })}
               />
               Italic
+            </label>
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="inline-flex items-center gap-2 text-gray-300">
+              <input
+                type="checkbox"
+                checked={applyToAllWords}
+                onChange={(e) => setApplyToAllWords(e.target.checked)}
+              />
+              Apply editor style changes to all words (instead of only current word)
             </label>
           </div>
         </div>
@@ -687,7 +682,7 @@ export default function AdminFlashEditor() {
             onClick={clearCurrentWordStyle}
             className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-200"
           >
-            Clear Current Word
+            {applyToAllWords ? 'Clear All Words' : 'Clear Current Word'}
           </button>
           <button
             onClick={saveAllStyles}
@@ -699,12 +694,8 @@ export default function AdminFlashEditor() {
         </div>
       </div>
 
-      {message && (
-        <div className="p-3 rounded-md bg-green-900/30 border border-green-700 text-green-300">{message}</div>
-      )}
-      {error && (
-        <div className="p-3 rounded-md bg-red-900/30 border border-red-700 text-red-300">{error}</div>
-      )}
+      {message && <div className="p-3 rounded-md bg-green-900/30 border border-green-700 text-green-300">{message}</div>}
+      {error && <div className="p-3 rounded-md bg-red-900/30 border border-red-700 text-red-300">{error}</div>}
     </section>
   )
 }
