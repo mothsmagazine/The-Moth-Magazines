@@ -60,7 +60,7 @@ export default function Admin() {
             className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-100 font-semibold transition"
           >
             Logout
-          </button>
+          </button> 
         </div>
       </div>
 
